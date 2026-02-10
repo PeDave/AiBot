@@ -58,8 +58,8 @@ public class BitgetApiClient : IDisposable
     public BitgetApiClient(BitgetCredentials? credentials = null, ILogger<BitgetApiClient>? logger = null)
     {
         _authenticator = credentials != null ? new BitgetAuthenticator(credentials) : null;
-        _httpClient = new BitgetHttpClient(_authenticator, logger != null ? (ILogger<BitgetHttpClient>)LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<BitgetHttpClient>() : null);
-        _webSocketClient = new BitgetWebSocketClient(_authenticator, logger != null ? (ILogger<BitgetWebSocketClient>)LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<BitgetWebSocketClient>() : null);
+        _httpClient = new BitgetHttpClient(_authenticator);
+        _webSocketClient = new BitgetWebSocketClient(_authenticator);
 
         // Initialize REST API clients
         Common = new CommonApiClient(_httpClient);

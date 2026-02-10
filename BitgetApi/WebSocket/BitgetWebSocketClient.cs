@@ -95,7 +95,8 @@ public class BitgetWebSocketClient : IDisposable
 
         _publicClient.MessageReceived.Subscribe(msg =>
         {
-            HandleMessage(msg.Text);
+            if (msg.Text != null)
+                HandleMessage(msg.Text);
         });
 
         await _publicClient.Start();
@@ -133,7 +134,8 @@ public class BitgetWebSocketClient : IDisposable
 
         _privateClient.MessageReceived.Subscribe(msg =>
         {
-            HandleMessage(msg.Text);
+            if (msg.Text != null)
+                HandleMessage(msg.Text);
         });
 
         await _privateClient.Start();
