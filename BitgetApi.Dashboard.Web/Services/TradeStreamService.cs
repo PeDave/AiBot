@@ -1,20 +1,23 @@
 using BitgetApi.WebSocket;
 using BitgetApi.WebSocket.Public;
+using Microsoft.Extensions.Logging;
 
 namespace BitgetApi.Dashboard.Web.Services;
 
 public class TradeStreamService
 {
     private readonly BitgetWebSocketClient _client;
+    private readonly ILogger<TradeStreamService>? _logger;
     private readonly Dictionary<string, Queue<TradeData>> _trades = new();
     private SpotPublicChannels? _spotChannels;
     private const int MaxTradesPerSymbol = 50;
     
     public event Action? OnTradeReceived;
     
-    public TradeStreamService(BitgetWebSocketClient client)
+    public TradeStreamService(BitgetWebSocketClient client, ILogger<TradeStreamService>? logger = null)
     {
         _client = client;
+        _logger = logger;
     }
     
     public async Task InitializeAsync()
@@ -36,15 +39,24 @@ public class TradeStreamService
         
         await _spotChannels!.SubscribeTradesAsync(symbol, trade =>
         {
+            DateTime timestamp;
+            if (!string.IsNullOrEmpty(trade.Timestamp) && long.TryParse(trade.Timestamp, out var ts))
+            {
+                timestamp = DateTimeOffset.FromUnixTimeMilliseconds(ts).UtcDateTime;
+            }
+            else
+            {
+                _logger?.LogWarning("Failed to parse trade timestamp for {Symbol}, using current time", symbol);
+                timestamp = DateTime.UtcNow;
+            }
+            
             var tradeData = new TradeData
             {
                 Symbol = symbol,
                 Price = decimal.Parse(trade.Price),
                 Size = decimal.Parse(trade.Size),
                 Side = trade.Side,
-                Timestamp = !string.IsNullOrEmpty(trade.Timestamp) && long.TryParse(trade.Timestamp, out var ts)
-                    ? DateTimeOffset.FromUnixTimeMilliseconds(ts).UtcDateTime
-                    : DateTime.UtcNow
+                Timestamp = timestamp
             };
             
             var queue = _trades[symbol];

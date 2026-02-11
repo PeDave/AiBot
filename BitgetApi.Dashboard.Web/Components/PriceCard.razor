@@ -5,9 +5,16 @@
     <div class="price-card">
         <div class="symbol">@GetSymbolName(Symbol)</div>
         <div class="price">$@Price.Price.ToString("N2")</div>
-        <div class="change @(Price.Change24h >= 0 ? "positive" : "negative")">
-            @Price.Change24h.ToString("+0.00%;-0.00%")
-        </div>
+        @if (Price.Change24h.HasValue)
+        {
+            <div class="change @(Price.Change24h.Value >= 0 ? "positive" : "negative")">
+                @Price.Change24h.Value.ToString("+0.00%;-0.00%")
+            </div>
+        }
+        else
+        {
+            <div class="change">N/A</div>
+        }
         <div class="details">
             <span>H: $@Price.High24h.ToString("N2")</span>
             <span>L: $@Price.Low24h.ToString("N2")</span>

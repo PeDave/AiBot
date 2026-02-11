@@ -8,9 +8,9 @@
         {
             @foreach (var trade in Trades.Take(10))
             {
-                <div class="trade @trade.Side.ToLower()">
+                <div class="trade @GetSideCssClass(trade.Side)">
                     <span class="time">@trade.Timestamp.ToString("HH:mm:ss")</span>
-                    <span class="side @trade.Side.ToLower()">@trade.Side</span>
+                    <span class="side @GetSideCssClass(trade.Side)">@trade.Side</span>
                     <span class="price">@trade.Price.ToString("N2")</span>
                     <span class="size">@trade.Size.ToString("N4")</span>
                 </div>
@@ -26,4 +26,14 @@
 @code {
     [Parameter] public string Symbol { get; set; } = "";
     [Parameter] public IEnumerable<TradeData> Trades { get; set; } = Enumerable.Empty<TradeData>();
+    
+    private string GetSideCssClass(string side)
+    {
+        return side?.ToLowerInvariant() switch
+        {
+            "buy" => "buy",
+            "sell" => "sell",
+            _ => ""
+        };
+    }
 }

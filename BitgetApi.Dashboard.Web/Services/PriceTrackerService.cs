@@ -1,20 +1,23 @@
 using BitgetApi.WebSocket;
 using BitgetApi.WebSocket.Public;
 using System.Globalization;
+using Microsoft.Extensions.Logging;
 
 namespace BitgetApi.Dashboard.Web.Services;
 
 public class PriceTrackerService
 {
     private readonly BitgetWebSocketClient _client;
+    private readonly ILogger<PriceTrackerService>? _logger;
     private readonly Dictionary<string, PriceData> _prices = new();
     private SpotPublicChannels? _spotChannels;
     
     public event Action? OnPriceUpdated;
     
-    public PriceTrackerService(BitgetWebSocketClient client)
+    public PriceTrackerService(BitgetWebSocketClient client, ILogger<PriceTrackerService>? logger = null)
     {
         _client = client;
+        _logger = logger;
     }
     
     public async Task InitializeAsync()
@@ -35,9 +38,15 @@ public class PriceTrackerService
         {
             if (decimal.TryParse(ticker.LastPrice, NumberStyles.Any, CultureInfo.InvariantCulture, out var price))
             {
-                var change24h = decimal.TryParse(ticker.Open24h, NumberStyles.Any, CultureInfo.InvariantCulture, out var open) && open > 0
-                    ? ((price - open) / open) * 100
-                    : 0;
+                decimal? change24h = null;
+                if (decimal.TryParse(ticker.Open24h, NumberStyles.Any, CultureInfo.InvariantCulture, out var open) && open > 0)
+                {
+                    change24h = ((price - open) / open) * 100;
+                }
+                else
+                {
+                    _logger?.LogWarning("Could not calculate 24h change for {Symbol}: Open24h not available or zero", symbol);
+                }
                 
                 _prices[symbol] = new PriceData
                 {
@@ -64,7 +73,7 @@ public record PriceData
 {
     public string Symbol { get; init; } = "";
     public decimal Price { get; init; }
-    public decimal Change24h { get; init; }
+    public decimal? Change24h { get; init; }
     public decimal Volume { get; init; }
     public decimal High24h { get; init; }
     public decimal Low24h { get; init; }

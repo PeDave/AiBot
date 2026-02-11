@@ -1,19 +1,22 @@
 using BitgetApi.WebSocket;
 using BitgetApi.WebSocket.Public;
+using Microsoft.Extensions.Logging;
 
 namespace BitgetApi.Dashboard.Web.Services;
 
 public class OrderBookService
 {
     private readonly BitgetWebSocketClient _client;
+    private readonly ILogger<OrderBookService>? _logger;
     private readonly Dictionary<string, OrderBookData> _orderBooks = new();
     private SpotPublicChannels? _spotChannels;
     
     public event Action? OnOrderBookUpdated;
     
-    public OrderBookService(BitgetWebSocketClient client)
+    public OrderBookService(BitgetWebSocketClient client, ILogger<OrderBookService>? logger = null)
     {
         _client = client;
+        _logger = logger;
     }
     
     public async Task InitializeAsync()
@@ -44,14 +47,23 @@ public class OrderBookService
                 Size = decimal.Parse(b[1])
             }).ToList();
             
+            DateTime lastUpdate;
+            if (!string.IsNullOrEmpty(depthData.Timestamp) && long.TryParse(depthData.Timestamp, out var ts))
+            {
+                lastUpdate = DateTimeOffset.FromUnixTimeMilliseconds(ts).UtcDateTime;
+            }
+            else
+            {
+                _logger?.LogWarning("Failed to parse order book timestamp for {Symbol}, using current time", symbol);
+                lastUpdate = DateTime.UtcNow;
+            }
+            
             _orderBooks[symbol] = new OrderBookData
             {
                 Symbol = symbol,
                 Asks = asks,
                 Bids = bids,
-                LastUpdate = !string.IsNullOrEmpty(depthData.Timestamp) && long.TryParse(depthData.Timestamp, out var ts)
-                    ? DateTimeOffset.FromUnixTimeMilliseconds(ts).UtcDateTime
-                    : DateTime.UtcNow
+                LastUpdate = lastUpdate
             };
             
             OnOrderBookUpdated?.Invoke();
