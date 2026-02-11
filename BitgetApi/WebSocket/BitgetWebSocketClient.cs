@@ -251,35 +251,8 @@ public class BitgetWebSocketClient : IDisposable
     {
         try
         {
-            if (_debugMode)
-            {
-                var truncated = message.Length > 200 ? message[..200] + "..." : message;
-                System.Console.WriteLine($"[WebSocket] Received: {truncated}");
-            }
-
             _logger?.LogDebug("Received message: {Message}", message);
             OnMessage?.Invoke(this, message);
-
-            // Check for error messages
-            if (message.Contains("\"event\":\"error\""))
-            {
-                _logger?.LogError("WebSocket error received: {Message}", message);
-                if (_debugMode)
-                {
-                    System.Console.WriteLine($"[WebSocket] ERROR: {message}");
-                }
-                return;
-            }
-
-            // Check for subscription confirmation
-            if (message.Contains("\"event\":\"subscribe\""))
-            {
-                if (_debugMode)
-                {
-                    System.Console.WriteLine($"[WebSocket] Subscription confirmed");
-                }
-                return;
-            }
 
             // Check for pong response
             if (message.Contains("\"op\":\"pong\"") || message.Contains("\"event\":\"pong\""))
@@ -288,10 +261,31 @@ public class BitgetWebSocketClient : IDisposable
                 return;
             }
 
-            // Notify subscribers
-            foreach (var callback in _subscriptions.Values.SelectMany(x => x))
+            // Check for subscription confirmation
+            if (message.Contains("\"event\":\"subscribe\""))
             {
-                callback(message);
+                _logger?.LogDebug("Subscription confirmed");
+                return;
+            }
+
+            // ✅ FIX: Thread-safe enumeration - copy the callbacks first
+            List<Action<string>> callbacks;
+            lock (_subscriptions)
+            {
+                callbacks = _subscriptions.Values.SelectMany(x => x).ToList();
+            }
+
+            // ✅ Now iterate over the copy (safe from modifications)
+            foreach (var callback in callbacks)
+            {
+                try
+                {
+                    callback(message);
+                }
+                catch (Exception callbackEx)
+                {
+                    _logger?.LogError(callbackEx, "Error in subscription callback");
+                }
             }
         }
         catch (Exception ex)
@@ -332,16 +326,22 @@ public class BitgetWebSocketClient : IDisposable
 
     public void AddSubscription(string key, Action<string> callback)
     {
-        if (!_subscriptions.ContainsKey(key))
+        lock (_subscriptions)
         {
-            _subscriptions[key] = new List<Action<string>>();
+            if (!_subscriptions.ContainsKey(key))
+            {
+                _subscriptions[key] = new List<Action<string>>();
+            }
+            _subscriptions[key].Add(callback);
         }
-        _subscriptions[key].Add(callback);
     }
 
     public void RemoveSubscription(string key)
     {
-        _subscriptions.Remove(key);
+        lock (_subscriptions)
+        {
+            _subscriptions.Remove(key);
+        }
     }
 
     public void Dispose()

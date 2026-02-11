@@ -25,8 +25,30 @@ AnsiConsole.Write(new FigletText("Bitget Dashboard")
 
 AnsiConsole.MarkupLine("[dim]Initializing WebSocket connections...[/]");
 
-// Initialize services
+// Initialize services with DEBUG MODE
 var client = new BitgetApiClient();
+
+// ✅ Add global WebSocket event logging
+client.WebSocket.OnMessage += (sender, msg) =>
+{
+    // Write to a log file to avoid interfering with Spectre.Console
+    File.AppendAllText("websocket-debug.log", $"[{DateTime.Now:HH:mm:ss.fff}] RECV: {msg}\n");
+};
+
+client.WebSocket.OnConnected += (sender, args) =>
+{
+    File.AppendAllText("websocket-debug.log", $"[{DateTime.Now:HH:mm:ss.fff}] CONNECTED\n");
+};
+
+client.WebSocket.OnDisconnected += (sender, args) =>
+{
+    File.AppendAllText("websocket-debug.log", $"[{DateTime.Now:HH:mm:ss.fff}] DISCONNECTED\n");
+};
+
+client.WebSocket.OnError += (sender, ex) =>
+{
+    File.AppendAllText("websocket-debug.log", $"[{DateTime.Now:HH:mm:ss.fff}] ERROR: {ex.Message}\n");
+};
 var priceTracker = new PriceTrackerService();
 var orderBook = new OrderBookService();
 var tradeStream = new TradeStreamService(tradeHistorySize);
