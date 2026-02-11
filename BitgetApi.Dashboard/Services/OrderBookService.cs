@@ -7,6 +7,7 @@ namespace BitgetApi.Dashboard.Services;
 public class OrderBookService
 {
     private OrderBookSnapshot? _snapshot;
+    private readonly object _snapshotLock = new();
     
     public event Action<OrderBookSnapshot>? OnOrderBookUpdated;
     
@@ -14,14 +15,20 @@ public class OrderBookService
     {
         await client.SpotPublicChannels.SubscribeDepthAsync(symbol, depth, depthData =>
         {
-            _snapshot = new OrderBookSnapshot
+            var newSnapshot = new OrderBookSnapshot
             {
                 Symbol = symbol,
                 Bids = depthData.Bids.Take(depth).Select(ParseLevel).ToList(),
                 Asks = depthData.Asks.Take(depth).Select(ParseLevel).ToList(),
                 Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(depthData.Timestamp).UtcDateTime
             };
-            OnOrderBookUpdated?.Invoke(_snapshot);
+            
+            lock (_snapshotLock)
+            {
+                _snapshot = newSnapshot;
+            }
+            
+            OnOrderBookUpdated?.Invoke(newSnapshot);
         }, cancellationToken);
     }
     
@@ -33,5 +40,11 @@ public class OrderBookService
         );
     }
     
-    public OrderBookSnapshot? GetSnapshot() => _snapshot;
+    public OrderBookSnapshot? GetSnapshot()
+    {
+        lock (_snapshotLock)
+        {
+            return _snapshot;
+        }
+    }
 }

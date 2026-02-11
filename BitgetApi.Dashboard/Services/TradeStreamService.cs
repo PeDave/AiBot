@@ -43,7 +43,11 @@ public class TradeStreamService
         }, cancellationToken);
     }
     
-    public List<TradeRecord> GetRecentTrades() => _trades.Reverse().ToList();
+    public List<TradeRecord> GetRecentTrades()
+    {
+        // Create a thread-safe copy of the trades and reverse it
+        return _trades.ToArray().Reverse().ToList();
+    }
     
     public void Clear() => _trades.Clear();
 }
