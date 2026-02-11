@@ -20,18 +20,20 @@ public class PriceTrackerService
                 var change24h = 0m;
                 if (decimal.TryParse(ticker.Open24h, NumberStyles.Any, CultureInfo.InvariantCulture, out var open24h) && open24h > 0)
                 {
-                    if (decimal.TryParse(ticker.LastPrice, NumberStyles.Any, CultureInfo.InvariantCulture, out var lastPrice))
+                    if (decimal.TryParse(ticker.LastPrice, NumberStyles.Any, CultureInfo.InvariantCulture, out var currentPrice))
                     {
-                        change24h = ((lastPrice - open24h) / open24h) * 100;
+                        change24h = ((currentPrice - open24h) / open24h) * 100;
                     }
                 }
                 
                 _prices[symbol] = new PriceUpdate 
                 {
                     Symbol = symbol,
-                    Price = decimal.Parse(ticker.LastPrice, CultureInfo.InvariantCulture),
+                    LastPrice = decimal.TryParse(ticker.LastPrice, NumberStyles.Any, CultureInfo.InvariantCulture, out var lastPrice) ? lastPrice : 0,
+                    High24h = decimal.TryParse(ticker.High24h, NumberStyles.Any, CultureInfo.InvariantCulture, out var high) ? high : 0,
+                    Low24h = decimal.TryParse(ticker.Low24h, NumberStyles.Any, CultureInfo.InvariantCulture, out var low) ? low : 0,
+                    Volume24h = decimal.TryParse(ticker.BaseVolume, NumberStyles.Any, CultureInfo.InvariantCulture, out var vol) ? vol : 0,
                     Change24h = change24h,
-                    Volume = ticker.BaseVolume,
                     Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(ticker.Timestamp).UtcDateTime
                 };
                 
