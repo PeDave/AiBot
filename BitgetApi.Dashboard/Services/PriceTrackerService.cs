@@ -34,7 +34,9 @@ public class PriceTrackerService
                     Volume = ticker.BaseVolume,
                     Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(ticker.Timestamp).UtcDateTime
                 };
-                OnPriceUpdated?.Invoke(symbol, _prices[symbol]);
+                
+                var handler = OnPriceUpdated;
+                handler?.Invoke(symbol, _prices[symbol]);
             }
             catch (Exception ex)
             {

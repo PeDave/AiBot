@@ -7,7 +7,7 @@ namespace BitgetApi.Tests;
 public class ThreadSafetyTests
 {
     [Fact]
-    public void OrderBookService_GetSnapshot_ThreadSafe()
+    public async Task OrderBookService_GetSnapshot_ThreadSafe()
     {
         // Arrange
         var service = new OrderBookService();
@@ -37,14 +37,14 @@ public class ThreadSafetyTests
             }));
         }
         
-        Task.WaitAll(tasks.ToArray());
+        await Task.WhenAll(tasks);
         
         // Assert
         Assert.Empty(exceptions);
     }
     
     [Fact]
-    public void TradeStreamService_GetRecentTrades_ThreadSafe()
+    public async Task TradeStreamService_GetRecentTrades_ThreadSafe()
     {
         // Arrange
         var service = new TradeStreamService(maxTrades: 20);
@@ -74,14 +74,14 @@ public class ThreadSafetyTests
             }));
         }
         
-        Task.WaitAll(tasks.ToArray());
+        await Task.WhenAll(tasks);
         
         // Assert
         Assert.Empty(exceptions);
     }
     
     [Fact]
-    public void PriceTrackerService_GetPrice_ThreadSafe()
+    public async Task PriceTrackerService_GetPrice_ThreadSafe()
     {
         // Arrange
         var service = new PriceTrackerService();
@@ -111,7 +111,7 @@ public class ThreadSafetyTests
             }));
         }
         
-        Task.WaitAll(tasks.ToArray());
+        await Task.WhenAll(tasks);
         
         // Assert
         Assert.Empty(exceptions);

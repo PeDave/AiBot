@@ -41,7 +41,8 @@ public class TradeStreamService
                     _trades.TryDequeue(out _);
                 }
                 
-                OnTradeReceived?.Invoke(trade);
+                var handler = OnTradeReceived;
+                handler?.Invoke(trade);
             }
             catch (Exception ex)
             {

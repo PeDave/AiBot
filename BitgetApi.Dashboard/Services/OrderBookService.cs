@@ -30,7 +30,8 @@ public class OrderBookService
                     _snapshot = newSnapshot;
                 }
                 
-                OnOrderBookUpdated?.Invoke(newSnapshot);
+                var handler = OnOrderBookUpdated;
+                handler?.Invoke(newSnapshot);
             }
             catch (Exception ex)
             {
