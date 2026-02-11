@@ -44,7 +44,7 @@ A beautiful, production-ready console dashboard for real-time cryptocurrency mar
 
 ### Prerequisites
 
-- [.NET 8.0 SDK](https://dotnet.net/download/dotnet/8.0) or later
+- [.NET 8.0 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) or later
 - Terminal with Unicode support (for best visual experience)
 
 ### Installation

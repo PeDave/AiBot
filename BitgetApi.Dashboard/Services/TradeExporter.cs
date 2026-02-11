@@ -18,7 +18,7 @@ public class TradeExporter
             return;
         }
         
-        filename ??= $"trades_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+        filename ??= $"trades_{DateTime.UtcNow:yyyyMMdd_HHmmss}.csv";
         var fullPath = Path.Combine(_basePath, filename);
         
         using var writer = new StreamWriter(fullPath, append: false);
