@@ -15,20 +15,28 @@ public class OrderBookService
     {
         await client.SpotPublicChannels.SubscribeDepthAsync(symbol, depth, depthData =>
         {
-            var newSnapshot = new OrderBookSnapshot
+            try
             {
-                Symbol = symbol,
-                Bids = depthData.Bids.Take(depth).Select(ParseLevel).ToList(),
-                Asks = depthData.Asks.Take(depth).Select(ParseLevel).ToList(),
-                Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(depthData.Timestamp).UtcDateTime
-            };
-            
-            lock (_snapshotLock)
-            {
-                _snapshot = newSnapshot;
+                var newSnapshot = new OrderBookSnapshot
+                {
+                    Symbol = symbol,
+                    Bids = depthData.Bids.Take(depth).Select(ParseLevel).ToList(),
+                    Asks = depthData.Asks.Take(depth).Select(ParseLevel).ToList(),
+                    Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(depthData.Timestamp).UtcDateTime
+                };
+                
+                lock (_snapshotLock)
+                {
+                    _snapshot = newSnapshot;
+                }
+                
+                OnOrderBookUpdated?.Invoke(newSnapshot);
             }
-            
-            OnOrderBookUpdated?.Invoke(newSnapshot);
+            catch (Exception ex)
+            {
+                // Log parsing error but don't crash - continue processing other messages
+                System.Diagnostics.Debug.WriteLine($"Error processing order book for {symbol}: {ex.Message}");
+            }
         }, cancellationToken);
     }
     
