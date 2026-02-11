@@ -1,0 +1,17 @@
+{
+  "Bitget": {
+    "ApiKey": "your-api-key-here",
+    "SecretKey": "your-secret-key-here",
+    "Passphrase": "your-passphrase-here",
+    "BaseUrl": "https://api.bitget.com",
+    "WebSocketUrl": "wss://ws.bitget.com/v2/ws"
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "BitgetApi": "Debug",
+      "Microsoft": "Warning",
+      "System": "Warning"
+    }
+  }
+}
