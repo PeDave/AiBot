@@ -120,7 +120,7 @@ public class SpotPublicChannels
     /// </summary>
     public async Task SubscribeTickerAsync(string symbol, Action<TickerData> callback, CancellationToken cancellationToken = default)
     {
-        var channel = "tickers";
+        var channel = "ticker";
         await _webSocket.SubscribeAsync(channel, symbol, "SPOT", isPrivate: false, cancellationToken);
 
         _webSocket.AddSubscription($"{channel}_{symbol}", message =>
@@ -145,7 +145,7 @@ public class SpotPublicChannels
     /// </summary>
     public async Task SubscribeTradesAsync(string symbol, Action<TradeData> callback, CancellationToken cancellationToken = default)
     {
-        var channel = "trades";
+        var channel = "trade";
         await _webSocket.SubscribeAsync(channel, symbol, "SPOT", isPrivate: false, cancellationToken);
 
         _webSocket.AddSubscription($"{channel}_{symbol}", message =>
