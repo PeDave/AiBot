@@ -15,7 +15,7 @@ class Program
         System.Console.WriteLine();
 
         // Demo 1: Public API - No authentication required
-        await DemoPublicApiAsync();
+        //await DemoPublicApiAsync();
 
         System.Console.WriteLine();
         System.Console.WriteLine("Press any key to continue to authenticated examples (requires API keys)...");
@@ -24,10 +24,13 @@ class Program
 
         // Demo 2: Private API - Authentication required
         // Uncomment and add your credentials to test authenticated endpoints
-        await DemoPrivateApiAsync();
+        //await DemoPrivateApiAsync();
 
         // Demo 3: WebSocket - Real-time data
-        await DemoWebSocketAsync();
+        //await DemoWebSocketAsync();
+
+        // Demo 4: Advanced Public API
+        //await DemoAdvancedPublicApiAsync();
 
         System.Console.WriteLine();
         System.Console.WriteLine("Demo completed. Press any key to exit...");
@@ -262,6 +265,80 @@ class Program
         catch (Exception ex)
         {
             System.Console.WriteLine($"✗ Error: {ex.Message}");
+        }
+    }
+
+    static async Task DemoAdvancedPublicApiAsync()
+    {
+        System.Console.WriteLine("--- Demo 4: Advanced Public API ---");
+        System.Console.WriteLine();
+
+        using var client = new BitgetApiClient();
+
+        try
+        {
+            // 1. Recent Trades
+            System.Console.WriteLine("1. Getting recent BTCUSDT trades...");
+            var tradesResponse = await client.SpotMarket.GetRecentTradesAsync("BTCUSDT", limit: 10);
+            if (tradesResponse.IsSuccess && tradesResponse.Data != null)
+            {
+                System.Console.WriteLine($"   Total Trades: {tradesResponse.Data.Count}");
+                foreach (var trade in tradesResponse.Data.Take(5))
+                {
+                    var time = trade.Timestamp;
+                    System.Console.WriteLine($"   {time:HH:mm:ss} - {trade.Side.ToUpper(),-4} {trade.Size} BTC @ ${trade.Price}");
+                }
+            }
+            else
+            {
+                System.Console.WriteLine($"   ✗ Error: {tradesResponse.Message}");
+            }
+            System.Console.WriteLine();
+
+            // 2. Candlesticks
+            System.Console.WriteLine("2. Getting BTCUSDT candlesticks (15min, last 2 hours)...");
+            var endTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var startTime = endTime - (2 * 60 * 60 * 1000);
+
+            var candlesResponse = await client.SpotMarket.GetCandlesticksAsync(
+                "BTCUSDT", "15min", startTime, endTime
+            );
+
+            if (candlesResponse.IsSuccess && candlesResponse.Data != null)
+            {
+                System.Console.WriteLine($"   Total Candles: {candlesResponse.Data.Count}");
+
+                foreach (var candle in candlesResponse.Data.Take(5))
+                {
+                    // Debug: print raw timestamp
+                    System.Console.WriteLine($"   DEBUG - Raw TS: {candle.Timestamp}");
+
+                    if (candle.Timestamp > 0)
+                    {
+                        var time = DateTimeOffset.FromUnixTimeMilliseconds(candle.Timestamp).UtcDateTime;
+                        System.Console.WriteLine($"   {time:yyyy-MM-dd HH:mm} UTC - O:{candle.Open} H:{candle.High} L:{candle.Low} C:{candle.Close} V:{candle.BaseVolume}");
+                    }
+                    else
+                    {
+                        System.Console.WriteLine($"   INVALID TIMESTAMP - O:{candle.Open} H:{candle.High} L:{candle.Low} C:{candle.Close} V:{candle.BaseVolume}");
+                    }
+                }
+            }
+            else
+            {
+                System.Console.WriteLine($"   ✗ Error: {candlesResponse.Message}");
+            }
+            System.Console.WriteLine();
+
+            System.Console.WriteLine("✓ Advanced public API demo completed!");
+        }
+        catch (Exception ex)
+        {
+            System.Console.WriteLine($"✗ Error: {ex.Message}");
+            if (ex.InnerException != null)
+            {
+                System.Console.WriteLine($"   Inner: {ex.InnerException.Message}");
+            }
         }
     }
 }

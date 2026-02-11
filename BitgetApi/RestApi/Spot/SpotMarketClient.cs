@@ -118,31 +118,36 @@ public class TradeData
     public string Side { get; set; } = string.Empty;
 
     [JsonPropertyName("ts")]
-    public long Timestamp { get; set; }
+    public string Timestamp { get; set; } = string.Empty;
 }
 
+/// <summary>
+/// Candle data returned as array: [timestamp, open, high, low, close, baseVolume, quoteVolume]
+/// </summary>
 public class CandleData
 {
-    [JsonPropertyName("ts")]
-    public long Timestamp { get; set; }
+    private List<string> _raw = new();
 
-    [JsonPropertyName("open")]
-    public string Open { get; set; } = string.Empty;
+    // Constructor from array
+    public CandleData(List<string> raw)
+    {
+        _raw = raw ?? new();
+    }
 
-    [JsonPropertyName("high")]
-    public string High { get; set; } = string.Empty;
+    // For JSON deserialization
+    public CandleData() { }
 
-    [JsonPropertyName("low")]
-    public string Low { get; set; } = string.Empty;
+    // Bitget returns: [ts, open, high, low, close, baseVolume, quoteVolume]
+    public long Timestamp => _raw.Count > 0 && long.TryParse(_raw[0], out var ts) ? ts : 0;
+    public string Open => _raw.Count > 1 ? _raw[1] : "0";
+    public string High => _raw.Count > 2 ? _raw[2] : "0";
+    public string Low => _raw.Count > 3 ? _raw[3] : "0";
+    public string Close => _raw.Count > 4 ? _raw[4] : "0";
+    public string BaseVolume => _raw.Count > 5 ? _raw[5] : "0";
+    public string QuoteVolume => _raw.Count > 6 ? _raw[6] : "0";
 
-    [JsonPropertyName("close")]
-    public string Close { get; set; } = string.Empty;
-
-    [JsonPropertyName("baseVolume")]
-    public string BaseVolume { get; set; } = string.Empty;
-
-    [JsonPropertyName("quoteVolume")]
-    public string QuoteVolume { get; set; } = string.Empty;
+    // Internal setter for deserialization
+    internal void SetRaw(List<string> raw) => _raw = raw;
 }
 
 #endregion
@@ -239,7 +244,12 @@ public class SpotMarketClient
     /// <param name="granularity">Candle granularity (1min, 5min, 15min, 30min, 1h, 4h, 6h, 12h, 1day, 1week)</param>
     /// <param name="startTime">Start time in milliseconds</param>
     /// <param name="endTime">End time in milliseconds</param>
-    public async Task<BitgetResponse<List<CandleData>>> GetCandlesticksAsync(string symbol, string granularity, long? startTime = null, long? endTime = null, CancellationToken cancellationToken = default)
+    public async Task<BitgetResponse<List<CandleData>>> GetCandlesticksAsync(
+    string symbol,
+    string granularity,
+    long? startTime = null,
+    long? endTime = null,
+    CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(symbol))
             throw new ArgumentException("Symbol cannot be empty", nameof(symbol));
@@ -248,13 +258,35 @@ public class SpotMarketClient
             throw new ArgumentException("Granularity cannot be empty", nameof(granularity));
 
         var endpoint = $"/api/v2/spot/market/candles?symbol={symbol}&granularity={granularity}";
-        
+
         if (startTime.HasValue)
             endpoint += $"&startTime={startTime.Value}";
-        
+
         if (endTime.HasValue)
             endpoint += $"&endTime={endTime.Value}";
 
-        return await _httpClient.GetAsync<List<CandleData>>(endpoint, requiresAuth: false, cancellationToken);
+        // Bitget returns List<List<string>>, we need to convert
+        var response = await _httpClient.GetAsync<List<List<string>>>(endpoint, requiresAuth: false, cancellationToken);
+
+        if (response.IsSuccess && response.Data != null)
+        {
+            var candles = response.Data.Select(raw => new CandleData(raw)).ToList();
+
+            return new BitgetResponse<List<CandleData>>
+            {
+                Code = response.Code,
+                Message = response.Message,
+                RequestTime = response.RequestTime,
+                Data = candles
+            };
+        }
+
+        return new BitgetResponse<List<CandleData>>
+        {
+            Code = response.Code,
+            Message = response.Message,
+            RequestTime = response.RequestTime,
+            Data = null
+        };
     }
 }
