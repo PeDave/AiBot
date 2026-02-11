@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Logging;
 
 namespace BitgetApi.WebSocket.Public;
 
@@ -109,10 +110,12 @@ public class CandleData
 public class SpotPublicChannels
 {
     private readonly BitgetWebSocketClient _webSocket;
+    private readonly ILogger<SpotPublicChannels>? _logger;
 
-    public SpotPublicChannels(BitgetWebSocketClient webSocket)
+    public SpotPublicChannels(BitgetWebSocketClient webSocket, ILogger<SpotPublicChannels>? logger = null)
     {
         _webSocket = webSocket ?? throw new ArgumentNullException(nameof(webSocket));
+        _logger = logger;
     }
 
     /// <summary>
@@ -120,7 +123,7 @@ public class SpotPublicChannels
     /// </summary>
     public async Task SubscribeTickerAsync(string symbol, Action<TickerData> callback, CancellationToken cancellationToken = default)
     {
-        var channel = "tickers";
+        var channel = "ticker";
         await _webSocket.SubscribeAsync(channel, symbol, "SPOT", isPrivate: false, cancellationToken);
 
         _webSocket.AddSubscription($"{channel}_{symbol}", message =>
@@ -136,7 +139,10 @@ public class SpotPublicChannels
                     }
                 }
             }
-            catch { /* Ignore parse errors */ }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Error parsing ticker data for {Symbol}", symbol);
+            }
         });
     }
 
@@ -145,7 +151,7 @@ public class SpotPublicChannels
     /// </summary>
     public async Task SubscribeTradesAsync(string symbol, Action<TradeData> callback, CancellationToken cancellationToken = default)
     {
-        var channel = "trades";
+        var channel = "trade";
         await _webSocket.SubscribeAsync(channel, symbol, "SPOT", isPrivate: false, cancellationToken);
 
         _webSocket.AddSubscription($"{channel}_{symbol}", message =>
@@ -161,7 +167,10 @@ public class SpotPublicChannels
                     }
                 }
             }
-            catch { /* Ignore parse errors */ }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Error parsing trade data for {Symbol}", symbol);
+            }
         });
     }
 
@@ -186,7 +195,10 @@ public class SpotPublicChannels
                     }
                 }
             }
-            catch { /* Ignore parse errors */ }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Error parsing depth data for {Symbol}", symbol);
+            }
         });
     }
 
@@ -211,7 +223,10 @@ public class SpotPublicChannels
                     }
                 }
             }
-            catch { /* Ignore parse errors */ }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Error parsing candle data for {Symbol}", symbol);
+            }
         });
     }
 }

@@ -53,6 +53,7 @@ public class BitgetWebSocketClient : IDisposable
     private readonly ILogger<BitgetWebSocketClient>? _logger;
     private readonly Dictionary<string, List<Action<string>>> _subscriptions = new();
     private System.Threading.Timer? _pingTimer;
+    private readonly bool _debugMode;
 
     public const string PublicWebSocketUrl = "wss://ws.bitget.com/v2/ws/public";
     public const string PrivateWebSocketUrl = "wss://ws.bitget.com/v2/ws/private";
@@ -62,10 +63,11 @@ public class BitgetWebSocketClient : IDisposable
     public event EventHandler? OnDisconnected;
     public event EventHandler<Exception>? OnError;
 
-    public BitgetWebSocketClient(BitgetAuthenticator? authenticator = null, ILogger<BitgetWebSocketClient>? logger = null)
+    public BitgetWebSocketClient(BitgetAuthenticator? authenticator = null, ILogger<BitgetWebSocketClient>? logger = null, bool debugMode = false)
     {
         _authenticator = authenticator;
         _logger = logger;
+        _debugMode = debugMode;
     }
 
     /// <summary>
@@ -206,8 +208,10 @@ public class BitgetWebSocketClient : IDisposable
 
         var json = JsonSerializer.Serialize(message);
 
-        // ✅ DEBUG: Print what we're sending
-        //System.Console.WriteLine($"[WS SUBSCRIBE] Sending: {json}");
+        if (_debugMode)
+        {
+            System.Console.WriteLine($"[WebSocket] Subscribing: {json}");
+        }
 
         client.Send(json);
         _logger?.LogDebug("Subscribed to channel: {Channel}", channel);
@@ -247,11 +251,35 @@ public class BitgetWebSocketClient : IDisposable
     {
         try
         {
-            // ✅ ALWAYS print received messages
-            //System.Console.WriteLine($"[WS RECEIVE] {message}");
+            if (_debugMode)
+            {
+                var truncated = message.Length > 200 ? message[..200] + "..." : message;
+                System.Console.WriteLine($"[WebSocket] Received: {truncated}");
+            }
 
             _logger?.LogDebug("Received message: {Message}", message);
             OnMessage?.Invoke(this, message);
+
+            // Check for error messages
+            if (message.Contains("\"event\":\"error\""))
+            {
+                _logger?.LogError("WebSocket error received: {Message}", message);
+                if (_debugMode)
+                {
+                    System.Console.WriteLine($"[WebSocket] ERROR: {message}");
+                }
+                return;
+            }
+
+            // Check for subscription confirmation
+            if (message.Contains("\"event\":\"subscribe\""))
+            {
+                if (_debugMode)
+                {
+                    System.Console.WriteLine($"[WebSocket] Subscription confirmed");
+                }
+                return;
+            }
 
             // Check for pong response
             if (message.Contains("\"op\":\"pong\"") || message.Contains("\"event\":\"pong\""))
@@ -268,7 +296,6 @@ public class BitgetWebSocketClient : IDisposable
         }
         catch (Exception ex)
         {
-            //System.Console.WriteLine($"[WS ERROR] {ex.Message}");
             _logger?.LogError(ex, "Error handling WebSocket message");
             OnError?.Invoke(this, ex);
         }
