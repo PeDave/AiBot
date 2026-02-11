@@ -253,7 +253,7 @@ public class BitgetWebSocketClient : IDisposable
         {
             if (_debugMode)
             {
-                var truncated = message.Length > 200 ? message.Substring(0, 200) + "..." : message;
+                var truncated = message.Length > 200 ? message[..200] + "..." : message;
                 System.Console.WriteLine($"[WebSocket] Received: {truncated}");
             }
 
