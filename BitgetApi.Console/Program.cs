@@ -86,16 +86,20 @@ class Program
             var depthResponse = await client.SpotMarket.GetMarketDepthAsync("BTCUSDT", limit: 5);
             if (depthResponse.IsSuccess && depthResponse.Data != null)
             {
-                var depth = depthResponse.Data;
-                System.Console.WriteLine("   Asks (Sell Orders):");
-                foreach (var ask in depth.Asks.Take(5))
+                System.Console.WriteLine($"   Top 5 Bids:");
+                foreach (var bid in depthResponse.Data.Bids.Take(5))
                 {
-                    System.Console.WriteLine($"      Price: {ask.Price}, Size: {ask.Size}");
+                    var price = bid[0];  // Első elem = ár
+                    var size = bid[1];   // Második elem = mennyiség
+                    System.Console.WriteLine($"     ${price} - {size}");
                 }
-                System.Console.WriteLine("   Bids (Buy Orders):");
-                foreach (var bid in depth.Bids.Take(5))
+
+                System.Console.WriteLine($"   Top 5 Asks:");
+                foreach (var ask in depthResponse.Data.Asks.Take(5))
                 {
-                    System.Console.WriteLine($"      Price: {bid.Price}, Size: {bid.Size}");
+                    var price = ask[0];
+                    var size = ask[1];
+                    System.Console.WriteLine($"     ${price} - {size}");
                 }
             }
             System.Console.WriteLine();

@@ -84,25 +84,23 @@ public class TickerData
     public string Change24h { get; set; } = string.Empty;
 }
 
-public class OrderBookEntry
-{
-    [JsonPropertyName("price")]
-    public string Price { get; set; } = string.Empty;
-
-    [JsonPropertyName("size")]
-    public string Size { get; set; } = string.Empty;
-}
-
 public class OrderBookData
 {
     [JsonPropertyName("asks")]
-    public List<OrderBookEntry> Asks { get; set; } = new();
+    public List<List<string>> Asks { get; set; } = new();
 
     [JsonPropertyName("bids")]
-    public List<OrderBookEntry> Bids { get; set; } = new();
+    public List<List<string>> Bids { get; set; } = new();
 
     [JsonPropertyName("ts")]
-    public long Timestamp { get; set; }
+    public string Timestamp { get; set; } = string.Empty;
+
+    // Helper properties for easy access
+    public List<(decimal Price, decimal Size)> AsksParsed =>
+        Asks.Select(a => (decimal.Parse(a[0]), decimal.Parse(a[1]))).ToList();
+
+    public List<(decimal Price, decimal Size)> BidsParsed =>
+        Bids.Select(b => (decimal.Parse(b[0]), decimal.Parse(b[1]))).ToList();
 }
 
 public class TradeData
