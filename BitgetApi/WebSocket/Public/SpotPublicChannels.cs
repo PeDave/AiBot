@@ -47,10 +47,10 @@ public class TradeData
     [JsonPropertyName("tradeId")]
     public string TradeId { get; set; } = string.Empty;
 
-    [JsonPropertyName("px")]
+    [JsonPropertyName("price")]
     public string Price { get; set; } = string.Empty;
 
-    [JsonPropertyName("sz")]
+    [JsonPropertyName("size")]
     public string Size { get; set; } = string.Empty;
 
     [JsonPropertyName("side")]
