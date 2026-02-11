@@ -1,0 +1,47 @@
+@using BitgetApi.Dashboard.Web.Services
+
+@if (Price != null)
+{
+    <div class="price-card">
+        <div class="symbol">@GetSymbolName(Symbol)</div>
+        <div class="price">$@Price.Price.ToString("N2")</div>
+        <div class="change @(Price.Change24h >= 0 ? "positive" : "negative")">
+            @Price.Change24h.ToString("+0.00%;-0.00%")
+        </div>
+        <div class="details">
+            <span>H: $@Price.High24h.ToString("N2")</span>
+            <span>L: $@Price.Low24h.ToString("N2")</span>
+        </div>
+        <div class="volume">Vol: @FormatVolume(Price.Volume)</div>
+    </div>
+}
+else
+{
+    <div class="price-card loading">
+        <div class="symbol">@GetSymbolName(Symbol)</div>
+        <div class="price">...</div>
+        <div class="status">Waiting for data...</div>
+    </div>
+}
+
+@code {
+    [Parameter] public string Symbol { get; set; } = "";
+    [Parameter] public PriceData? Price { get; set; }
+    
+    private string GetSymbolName(string symbol) => symbol switch
+    {
+        "BTCUSDT" => "BTC",
+        "ETHUSDT" => "ETH",
+        "XRPUSDT" => "XRP",
+        _ => symbol
+    };
+    
+    private string FormatVolume(decimal volume)
+    {
+        if (volume >= 1_000_000)
+            return $"{volume / 1_000_000:N2}M";
+        if (volume >= 1_000)
+            return $"{volume / 1_000:N2}K";
+        return volume.ToString("N2");
+    }
+}

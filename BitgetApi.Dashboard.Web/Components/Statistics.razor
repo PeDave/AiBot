@@ -1,0 +1,23 @@
+<div class="statistics">
+    <h3>STATISTICS</h3>
+    
+    <div class="stat-item">
+        <span class="label">Uptime:</span>
+        <span class="value">@Uptime.ToString(@"hh\:mm\:ss")</span>
+    </div>
+    
+    <div class="stat-item">
+        <span class="label">Messages:</span>
+        <span class="value">@MessageCount</span>
+    </div>
+    
+    <div class="stat-item">
+        <span class="label">Status:</span>
+        <span class="value connected">Connected</span>
+    </div>
+</div>
+
+@code {
+    [Parameter] public TimeSpan Uptime { get; set; }
+    [Parameter] public int MessageCount { get; set; }
+}

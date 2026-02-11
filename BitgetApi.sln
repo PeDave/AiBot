@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BitgetApi.IntegrationTests"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BitgetApi.Dashboard", "BitgetApi.Dashboard\BitgetApi.Dashboard.csproj", "{30E94B1E-6686-4F37-8EC8-ED6F380F4895}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BitgetApi.Dashboard.Web", "BitgetApi.Dashboard.Web\BitgetApi.Dashboard.Web.csproj", "{B97B3F0B-6D83-477A-ADF7-391F4FCB922C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -83,6 +85,18 @@ Global
 		{30E94B1E-6686-4F37-8EC8-ED6F380F4895}.Release|x64.Build.0 = Release|Any CPU
 		{30E94B1E-6686-4F37-8EC8-ED6F380F4895}.Release|x86.ActiveCfg = Release|Any CPU
 		{30E94B1E-6686-4F37-8EC8-ED6F380F4895}.Release|x86.Build.0 = Release|Any CPU
+		{B97B3F0B-6D83-477A-ADF7-391F4FCB922C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B97B3F0B-6D83-477A-ADF7-391F4FCB922C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B97B3F0B-6D83-477A-ADF7-391F4FCB922C}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{B97B3F0B-6D83-477A-ADF7-391F4FCB922C}.Debug|x64.Build.0 = Debug|Any CPU
+		{B97B3F0B-6D83-477A-ADF7-391F4FCB922C}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{B97B3F0B-6D83-477A-ADF7-391F4FCB922C}.Debug|x86.Build.0 = Debug|Any CPU
+		{B97B3F0B-6D83-477A-ADF7-391F4FCB922C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B97B3F0B-6D83-477A-ADF7-391F4FCB922C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B97B3F0B-6D83-477A-ADF7-391F4FCB922C}.Release|x64.ActiveCfg = Release|Any CPU
+		{B97B3F0B-6D83-477A-ADF7-391F4FCB922C}.Release|x64.Build.0 = Release|Any CPU
+		{B97B3F0B-6D83-477A-ADF7-391F4FCB922C}.Release|x86.ActiveCfg = Release|Any CPU
+		{B97B3F0B-6D83-477A-ADF7-391F4FCB922C}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
