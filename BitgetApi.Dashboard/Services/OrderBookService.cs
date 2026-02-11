@@ -1,0 +1,37 @@
+using System.Globalization;
+using BitgetApi.Dashboard.Models;
+using BitgetApi.WebSocket.Public;
+
+namespace BitgetApi.Dashboard.Services;
+
+public class OrderBookService
+{
+    private OrderBookSnapshot? _snapshot;
+    
+    public event Action<OrderBookSnapshot>? OnOrderBookUpdated;
+    
+    public async Task SubscribeAsync(string symbol, BitgetApiClient client, int depth = 5, CancellationToken cancellationToken = default)
+    {
+        await client.SpotPublicChannels.SubscribeDepthAsync(symbol, depth, depthData =>
+        {
+            _snapshot = new OrderBookSnapshot
+            {
+                Symbol = symbol,
+                Bids = depthData.Bids.Take(depth).Select(ParseLevel).ToList(),
+                Asks = depthData.Asks.Take(depth).Select(ParseLevel).ToList(),
+                Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(depthData.Timestamp).UtcDateTime
+            };
+            OnOrderBookUpdated?.Invoke(_snapshot);
+        }, cancellationToken);
+    }
+    
+    private (decimal Price, decimal Size) ParseLevel(List<string> level)
+    {
+        return (
+            decimal.Parse(level[0], CultureInfo.InvariantCulture),
+            decimal.Parse(level[1], CultureInfo.InvariantCulture)
+        );
+    }
+    
+    public OrderBookSnapshot? GetSnapshot() => _snapshot;
+}
