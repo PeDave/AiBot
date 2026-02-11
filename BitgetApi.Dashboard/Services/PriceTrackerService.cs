@@ -29,9 +29,11 @@ public class PriceTrackerService
                 _prices[symbol] = new PriceUpdate 
                 {
                     Symbol = symbol,
-                    Price = decimal.Parse(ticker.LastPrice, CultureInfo.InvariantCulture),
+                    LastPrice = decimal.Parse(ticker.LastPrice, CultureInfo.InvariantCulture),
+                    High24h = decimal.TryParse(ticker.High24h, NumberStyles.Any, CultureInfo.InvariantCulture, out var high) ? high : 0,
+                    Low24h = decimal.TryParse(ticker.Low24h, NumberStyles.Any, CultureInfo.InvariantCulture, out var low) ? low : 0,
+                    Volume24h = decimal.TryParse(ticker.BaseVolume, NumberStyles.Any, CultureInfo.InvariantCulture, out var vol) ? vol : 0,
                     Change24h = change24h,
-                    Volume = ticker.BaseVolume,
                     Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(ticker.Timestamp).UtcDateTime
                 };
                 

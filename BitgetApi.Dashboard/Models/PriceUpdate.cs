@@ -3,8 +3,14 @@ namespace BitgetApi.Dashboard.Models;
 public class PriceUpdate
 {
     public string Symbol { get; set; } = string.Empty;
-    public decimal Price { get; set; }
+    public decimal LastPrice { get; set; }
+    public decimal High24h { get; set; }
+    public decimal Low24h { get; set; }
+    public decimal Volume24h { get; set; }
     public decimal Change24h { get; set; }
-    public string Volume { get; set; } = string.Empty;
     public DateTime Timestamp { get; set; }
+    
+    // Backward compatibility alias
+    public decimal Price => LastPrice;
+    public string Volume => Volume24h.ToString("F8");
 }
