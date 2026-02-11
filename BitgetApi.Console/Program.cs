@@ -1,5 +1,7 @@
 using BitgetApi;
 using BitgetApi.Models;
+using Microsoft.Extensions.Configuration;
+using System.Globalization;
 
 namespace BitgetApi.Console;
 
@@ -22,10 +24,10 @@ class Program
 
         // Demo 2: Private API - Authentication required
         // Uncomment and add your credentials to test authenticated endpoints
-        // await DemoPrivateApiAsync();
+        await DemoPrivateApiAsync();
 
         // Demo 3: WebSocket - Real-time data
-        // await DemoWebSocketAsync();
+        await DemoWebSocketAsync();
 
         System.Console.WriteLine();
         System.Console.WriteLine("Demo completed. Press any key to exit...");
@@ -131,13 +133,32 @@ class Program
         System.Console.WriteLine("--- Demo 2: Private API Endpoints (Authentication Required) ---");
         System.Console.WriteLine();
 
-        // TODO: Replace with your actual API credentials
+        // ✅ Load credentials from appsettings.json
+        var config = new ConfigurationBuilder()
+            .SetBasePath(Directory.GetCurrentDirectory())
+            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+            .Build();
+
         var credentials = new BitgetCredentials
         {
-            ApiKey = "YOUR_API_KEY",
-            SecretKey = "YOUR_SECRET_KEY",
-            Passphrase = "YOUR_PASSPHRASE"
+            ApiKey = config["Bitget:ApiKey"] ?? string.Empty,
+            SecretKey = config["Bitget:SecretKey"] ?? string.Empty,
+            Passphrase = config["Bitget:Passphrase"] ?? string.Empty
         };
+
+        // Validate credentials
+        if (string.IsNullOrEmpty(credentials.ApiKey) ||
+            string.IsNullOrEmpty(credentials.SecretKey) ||
+            string.IsNullOrEmpty(credentials.Passphrase))
+        {
+            System.Console.WriteLine("⚠️  API credentials not configured!");
+            System.Console.WriteLine("   Please edit appsettings.json and add your Bitget API keys.");
+            System.Console.WriteLine();
+            return;
+        }
+
+        System.Console.WriteLine($"✓ Loaded credentials for API Key: {credentials.ApiKey.Substring(0, Math.Min(10, credentials.ApiKey.Length))}...");
+        System.Console.WriteLine();
 
         using var client = new BitgetApiClient(credentials);
 
@@ -148,10 +169,24 @@ class Program
             var assetsResponse = await client.SpotAccount.GetAccountAssetsAsync();
             if (assetsResponse.IsSuccess && assetsResponse.Data != null)
             {
-                foreach (var asset in assetsResponse.Data.Where(a => decimal.Parse(a.Available) > 0).Take(5))
+                var nonZeroAssets = assetsResponse.Data
+                    .Where(a => decimal.TryParse(a.Available, NumberStyles.Any, CultureInfo.InvariantCulture, out var amount) && amount > 0)
+                    .ToList();
+                if (nonZeroAssets.Any())
                 {
-                    System.Console.WriteLine($"   {asset.Coin}: Available={asset.Available}, Frozen={asset.Frozen}");
+                    foreach (var asset in nonZeroAssets.Take(10))
+                    {
+                        System.Console.WriteLine($"   {asset.Coin}: Available={asset.Available}, Frozen={asset.Frozen}, USDT Value={asset.UsdtValue}");
+                    }
                 }
+                else
+                {
+                    System.Console.WriteLine("   No assets found (account might be empty)");
+                }
+            }
+            else
+            {
+                System.Console.WriteLine($"   Error: {assetsResponse.Message}");
             }
             System.Console.WriteLine();
 
@@ -161,22 +196,21 @@ class Program
             if (ordersResponse.IsSuccess && ordersResponse.Data != null)
             {
                 System.Console.WriteLine($"   Total Open Orders: {ordersResponse.Data.Count}");
-                foreach (var order in ordersResponse.Data.Take(5))
+                if (ordersResponse.Data.Any())
                 {
-                    System.Console.WriteLine($"   - {order.Symbol}: {order.Side} {order.Size} @ {order.Price}");
+                    foreach (var order in ordersResponse.Data.Take(5))
+                    {
+                        System.Console.WriteLine($"   - {order.Symbol}: {order.Side} {order.Size} @ {order.Price} (Status: {order.Status})");
+                    }
+                }
+                else
+                {
+                    System.Console.WriteLine("   No open orders");
                 }
             }
-            System.Console.WriteLine();
-
-            // Get futures account
-            System.Console.WriteLine("3. Getting futures account (USDT)...");
-            var futuresAccountResponse = await client.FuturesAccount.GetAccountsAsync("USDT-FUTURES");
-            if (futuresAccountResponse.IsSuccess && futuresAccountResponse.Data != null)
+            else
             {
-                foreach (var account in futuresAccountResponse.Data)
-                {
-                    System.Console.WriteLine($"   {account.MarginCoin}: Available={account.Available}, Equity={account.Equity}");
-                }
+                System.Console.WriteLine($"   Error: {assetsResponse.Message}");
             }
             System.Console.WriteLine();
 
@@ -185,7 +219,10 @@ class Program
         catch (Exception ex)
         {
             System.Console.WriteLine($"✗ Error: {ex.Message}");
-            System.Console.WriteLine("   Note: Make sure to set valid API credentials");
+            if (ex.InnerException != null)
+            {
+                System.Console.WriteLine($"   Inner: {ex.InnerException.Message}");
+            }
         }
     }
 

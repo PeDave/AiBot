@@ -208,7 +208,7 @@ public class SpotTradeClient
     /// </summary>
     public async Task<BitgetResponse<List<OrderInfo>>> GetOpenOrdersAsync(string? symbol = null, CancellationToken cancellationToken = default)
     {
-        var endpoint = "/api/v2/spot/trade/open-orders";
+        var endpoint = "/api/v2/spot/trade/unfilled-orders";
         
         if (!string.IsNullOrWhiteSpace(symbol))
             endpoint += $"?symbol={symbol}";
