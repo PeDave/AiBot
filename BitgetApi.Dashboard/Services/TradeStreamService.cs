@@ -21,29 +21,42 @@ public class TradeStreamService
     {
         await client.SpotPublicChannels.SubscribeTradesAsync(symbol, tradeData =>
         {
-            var trade = new TradeRecord
+            try
             {
-                Symbol = symbol,
-                TradeId = tradeData.TradeId,
-                Price = decimal.Parse(tradeData.Price, CultureInfo.InvariantCulture),
-                Size = decimal.Parse(tradeData.Size, CultureInfo.InvariantCulture),
-                Side = tradeData.Side.ToLowerInvariant(),
-                Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(tradeData.Timestamp).UtcDateTime
-            };
-            
-            _trades.Enqueue(trade);
-            
-            // Keep only the last N trades
-            while (_trades.Count > _maxTrades)
-            {
-                _trades.TryDequeue(out _);
+                var trade = new TradeRecord
+                {
+                    Symbol = symbol,
+                    TradeId = tradeData.TradeId,
+                    Price = decimal.Parse(tradeData.Price, CultureInfo.InvariantCulture),
+                    Size = decimal.Parse(tradeData.Size, CultureInfo.InvariantCulture),
+                    Side = tradeData.Side.ToLowerInvariant(),
+                    Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(tradeData.Timestamp).UtcDateTime
+                };
+                
+                _trades.Enqueue(trade);
+                
+                // Keep only the last N trades
+                while (_trades.Count > _maxTrades)
+                {
+                    _trades.TryDequeue(out _);
+                }
+                
+                var handler = OnTradeReceived;
+                handler?.Invoke(trade);
             }
-            
-            OnTradeReceived?.Invoke(trade);
+            catch (Exception ex)
+            {
+                // Log parsing error but don't crash - continue processing other messages
+                System.Diagnostics.Debug.WriteLine($"Error processing trade for {symbol}: {ex.Message}");
+            }
         }, cancellationToken);
     }
     
-    public List<TradeRecord> GetRecentTrades() => _trades.Reverse().ToList();
+    public List<TradeRecord> GetRecentTrades()
+    {
+        // Create a thread-safe copy of the trades and reverse it
+        return _trades.ToArray().Reverse().ToList();
+    }
     
     public void Clear() => _trades.Clear();
 }

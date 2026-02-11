@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\BitgetApi\BitgetApi.csproj" />
+    <ProjectReference Include="..\BitgetApi.Dashboard\BitgetApi.Dashboard.csproj" />
   </ItemGroup>
 
 </Project>

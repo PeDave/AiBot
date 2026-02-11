@@ -15,24 +15,34 @@ public class PriceTrackerService
     {
         await client.SpotPublicChannels.SubscribeTickerAsync(symbol, ticker => 
         {
-            var change24h = 0m;
-            if (decimal.TryParse(ticker.Open24h, NumberStyles.Any, CultureInfo.InvariantCulture, out var open24h) && open24h > 0)
+            try
             {
-                if (decimal.TryParse(ticker.LastPrice, NumberStyles.Any, CultureInfo.InvariantCulture, out var lastPrice))
+                var change24h = 0m;
+                if (decimal.TryParse(ticker.Open24h, NumberStyles.Any, CultureInfo.InvariantCulture, out var open24h) && open24h > 0)
                 {
-                    change24h = ((lastPrice - open24h) / open24h) * 100;
+                    if (decimal.TryParse(ticker.LastPrice, NumberStyles.Any, CultureInfo.InvariantCulture, out var lastPrice))
+                    {
+                        change24h = ((lastPrice - open24h) / open24h) * 100;
+                    }
                 }
+                
+                _prices[symbol] = new PriceUpdate 
+                {
+                    Symbol = symbol,
+                    Price = decimal.Parse(ticker.LastPrice, CultureInfo.InvariantCulture),
+                    Change24h = change24h,
+                    Volume = ticker.BaseVolume,
+                    Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(ticker.Timestamp).UtcDateTime
+                };
+                
+                var handler = OnPriceUpdated;
+                handler?.Invoke(symbol, _prices[symbol]);
             }
-            
-            _prices[symbol] = new PriceUpdate 
+            catch (Exception ex)
             {
-                Symbol = symbol,
-                Price = decimal.Parse(ticker.LastPrice, CultureInfo.InvariantCulture),
-                Change24h = change24h,
-                Volume = ticker.BaseVolume,
-                Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(ticker.Timestamp).UtcDateTime
-            };
-            OnPriceUpdated?.Invoke(symbol, _prices[symbol]);
+                // Log parsing error but don't crash - continue processing other messages
+                System.Diagnostics.Debug.WriteLine($"Error processing ticker for {symbol}: {ex.Message}");
+            }
         }, cancellationToken);
     }
     
