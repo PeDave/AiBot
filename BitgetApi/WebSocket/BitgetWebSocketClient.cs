@@ -268,10 +268,7 @@ public class BitgetWebSocketClient : IDisposable
                 return;
             }
 
-            // ✅ ADD DEBUG LOGGING HERE!
-            File.AppendAllText("websocket-debug.log", $"[{DateTime.Now:HH:mm:ss.fff}] PARSING message...\n");
-
-            // ✅ FIX: Parse the message to get the channel and instId
+            // Parse the message to get the channel and instId
             try
             {
                 using var doc = JsonDocument.Parse(message);
@@ -286,30 +283,26 @@ public class BitgetWebSocketClient : IDisposable
                         : null;
 
                     // Build the subscription key
+                    if (string.IsNullOrEmpty(channel))
+                    {
+                        _logger?.LogTrace("Channel is null or empty");
+                        return;
+                    }
+
                     var key = instId != null ? $"{channel}_{instId}" : channel;
 
-                    // ✅ ADD DEBUG LOGGING
-                    File.AppendAllText("websocket-debug.log",
-                        $"[{DateTime.Now:HH:mm:ss.fff}] Looking for subscription key: {key}\n");
-
-                    // ✅ Only call the callbacks for THIS specific channel
+                    // Only call the callbacks for THIS specific channel
                     List<Action<string>> callbacks;
                     lock (_subscriptions)
                     {
-                        File.AppendAllText("websocket-debug.log",
-                            $"[{DateTime.Now:HH:mm:ss.fff}] Available keys: {string.Join(", ", _subscriptions.Keys)}\n");
-
                         if (_subscriptions.TryGetValue(key, out var callbackList))
                         {
                             callbacks = callbackList.ToList();
-                            File.AppendAllText("websocket-debug.log",
-                                $"[{DateTime.Now:HH:mm:ss.fff}] Found {callbacks.Count} callbacks for {key}\n");
                         }
                         else
                         {
                             // No subscription found for this channel
-                            File.AppendAllText("websocket-debug.log",
-                                $"[{DateTime.Now:HH:mm:ss.fff}] NO SUBSCRIPTION FOUND for key: {key}\n");
+                            _logger?.LogTrace("No subscription found for key: {Key}", key);
                             return;
                         }
                     }
@@ -319,40 +312,29 @@ public class BitgetWebSocketClient : IDisposable
                     {
                         try
                         {
-                            File.AppendAllText("websocket-debug.log",
-                                $"[{DateTime.Now:HH:mm:ss.fff}] Calling callback for {key}...\n");
                             callback(message);
-                            File.AppendAllText("websocket-debug.log",
-                                $"[{DateTime.Now:HH:mm:ss.fff}] Callback completed for {key}\n");
                         }
                         catch (Exception callbackEx)
                         {
                             _logger?.LogError(callbackEx, "Error in subscription callback for {Key}", key);
-                            File.AppendAllText("websocket-debug.log",
-                                $"[{DateTime.Now:HH:mm:ss.fff}] CALLBACK ERROR: {callbackEx.Message}\n");
                         }
                     }
                 }
                 else
                 {
-                    File.AppendAllText("websocket-debug.log",
-                        $"[{DateTime.Now:HH:mm:ss.fff}] Message doesn't have 'arg' or 'channel' property\n");
+                    _logger?.LogTrace("Message doesn't have 'arg' or 'channel' property");
                 }
             }
-            catch (JsonException jsonEx)
+            catch (JsonException)
             {
                 // Not a JSON message or doesn't have the expected structure
                 _logger?.LogWarning("Could not parse message structure: {Message}", message);
-                File.AppendAllText("websocket-debug.log",
-                    $"[{DateTime.Now:HH:mm:ss.fff}] JSON PARSE ERROR: {jsonEx.Message}\n");
             }
         }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Error handling WebSocket message");
             OnError?.Invoke(this, ex);
-            File.AppendAllText("websocket-debug.log",
-                $"[{DateTime.Now:HH:mm:ss.fff}] HANDLE MESSAGE ERROR: {ex.Message}\n");
         }
     }
 
