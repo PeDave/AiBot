@@ -57,7 +57,7 @@ public class TradeData
     public string Side { get; set; } = string.Empty;
 
     [JsonPropertyName("ts")]
-    public long Timestamp { get; set; }
+    public string Timestamp { get; set; } = string.Empty;
 }
 
 public class DepthData
