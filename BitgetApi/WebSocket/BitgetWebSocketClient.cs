@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 using BitgetApi.Auth;
 using Microsoft.Extensions.Logging;
@@ -177,14 +177,14 @@ public class BitgetWebSocketClient : IDisposable
     public async Task SubscribeAsync(string channel, string? instId = null, string? instType = null, bool isPrivate = false, CancellationToken cancellationToken = default)
     {
         var client = isPrivate ? _privateClient : _publicClient;
-        
+
         if (client == null || !client.IsRunning)
         {
             if (isPrivate)
                 await ConnectPrivateAsync(cancellationToken);
             else
                 await ConnectPublicAsync(cancellationToken);
-            
+
             client = isPrivate ? _privateClient : _publicClient;
         }
 
@@ -205,8 +205,15 @@ public class BitgetWebSocketClient : IDisposable
         };
 
         var json = JsonSerializer.Serialize(message);
+
+        // ✅ DEBUG: Print what we're sending
+        //System.Console.WriteLine($"[WS SUBSCRIBE] Sending: {json}");
+
         client.Send(json);
         _logger?.LogDebug("Subscribed to channel: {Channel}", channel);
+
+        // ✅ Wait a bit to ensure subscription is processed
+        await Task.Delay(100);
     }
 
     /// <summary>
@@ -240,6 +247,9 @@ public class BitgetWebSocketClient : IDisposable
     {
         try
         {
+            // ✅ ALWAYS print received messages
+            //System.Console.WriteLine($"[WS RECEIVE] {message}");
+
             _logger?.LogDebug("Received message: {Message}", message);
             OnMessage?.Invoke(this, message);
 
@@ -258,6 +268,7 @@ public class BitgetWebSocketClient : IDisposable
         }
         catch (Exception ex)
         {
+            //System.Console.WriteLine($"[WS ERROR] {ex.Message}");
             _logger?.LogError(ex, "Error handling WebSocket message");
             OnError?.Invoke(this, ex);
         }

@@ -27,7 +27,7 @@ class Program
         //await DemoPrivateApiAsync();
 
         // Demo 3: WebSocket - Real-time data
-        //await DemoWebSocketAsync();
+        await DemoWebSocketAsync();
 
         // Demo 4: Advanced Public API
         //await DemoAdvancedPublicApiAsync();

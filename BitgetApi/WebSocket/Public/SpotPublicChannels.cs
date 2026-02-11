@@ -120,8 +120,8 @@ public class SpotPublicChannels
     /// </summary>
     public async Task SubscribeTickerAsync(string symbol, Action<TickerData> callback, CancellationToken cancellationToken = default)
     {
-        var channel = "ticker";
-        await _webSocket.SubscribeAsync(channel, symbol, "sp", isPrivate: false, cancellationToken);
+        var channel = "tickers";
+        await _webSocket.SubscribeAsync(channel, symbol, "SPOT", isPrivate: false, cancellationToken);
 
         _webSocket.AddSubscription($"{channel}_{symbol}", message =>
         {
@@ -145,8 +145,8 @@ public class SpotPublicChannels
     /// </summary>
     public async Task SubscribeTradesAsync(string symbol, Action<TradeData> callback, CancellationToken cancellationToken = default)
     {
-        var channel = "trade";
-        await _webSocket.SubscribeAsync(channel, symbol, "sp", isPrivate: false, cancellationToken);
+        var channel = "trades";
+        await _webSocket.SubscribeAsync(channel, symbol, "SPOT", isPrivate: false, cancellationToken);
 
         _webSocket.AddSubscription($"{channel}_{symbol}", message =>
         {
@@ -171,7 +171,7 @@ public class SpotPublicChannels
     public async Task SubscribeDepthAsync(string symbol, int depth, Action<DepthData> callback, CancellationToken cancellationToken = default)
     {
         var channel = depth <= 5 ? "books5" : "books15";
-        await _webSocket.SubscribeAsync(channel, symbol, "sp", isPrivate: false, cancellationToken);
+        await _webSocket.SubscribeAsync(channel, symbol, "SPOT", isPrivate: false, cancellationToken);
 
         _webSocket.AddSubscription($"{channel}_{symbol}", message =>
         {
@@ -196,7 +196,7 @@ public class SpotPublicChannels
     public async Task SubscribeCandlesAsync(string symbol, string interval, Action<CandleData> callback, CancellationToken cancellationToken = default)
     {
         var channel = $"candle{interval}";
-        await _webSocket.SubscribeAsync(channel, symbol, "sp", isPrivate: false, cancellationToken);
+        await _webSocket.SubscribeAsync(channel, symbol, "SPOT", isPrivate: false, cancellationToken);
 
         _webSocket.AddSubscription($"{channel}_{symbol}", message =>
         {

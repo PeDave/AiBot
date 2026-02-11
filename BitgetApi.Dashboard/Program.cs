@@ -1,4 +1,6 @@
-﻿using BitgetApi;
+﻿using System;
+using System.Collections.Generic;
+using BitgetApi;
 using BitgetApi.Dashboard.Services;
 using BitgetApi.Dashboard.UI;
 using Microsoft.Extensions.Configuration;
@@ -38,6 +40,12 @@ tradeStream.OnTradeReceived += trade => stats.RecordMessage();
 
 try
 {
+    // ✅ CONNECT WebSocket FIRST!
+    AnsiConsole.MarkupLine("[yellow]Connecting to Bitget WebSocket...[/]");
+    await client.WebSocket.ConnectPublicAsync();
+    AnsiConsole.MarkupLine("[green]✓[/] Connected to WebSocket!");
+    await Task.Delay(1000); // Give it time to stabilize
+
     // Subscribe to all symbols
     foreach (var symbol in symbols)
     {
@@ -54,7 +62,7 @@ try
     AnsiConsole.MarkupLine($"[green]✓[/] Subscribed to {symbols[0]} trades");
 
     AnsiConsole.MarkupLine("\n[green]Dashboard is ready! Press Q to quit.[/]");
-    await Task.Delay(2000);
+    await Task.Delay(5000);
 
     // Render loop with cancellation token
     var cts = new CancellationTokenSource();
