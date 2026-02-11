@@ -30,7 +30,7 @@ public class TradeStreamService
                     Price = decimal.Parse(tradeData.Price, CultureInfo.InvariantCulture),
                     Size = decimal.Parse(tradeData.Size, CultureInfo.InvariantCulture),
                     Side = tradeData.Side.ToLowerInvariant(),
-                    Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(tradeData.Timestamp).UtcDateTime
+                    Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(long.Parse(tradeData.Timestamp, CultureInfo.InvariantCulture)).UtcDateTime
                 };
                 
                 _trades.Enqueue(trade);

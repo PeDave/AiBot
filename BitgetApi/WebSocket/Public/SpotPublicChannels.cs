@@ -47,17 +47,17 @@ public class TradeData
     [JsonPropertyName("tradeId")]
     public string TradeId { get; set; } = string.Empty;
 
-    [JsonPropertyName("px")]
+    [JsonPropertyName("price")]
     public string Price { get; set; } = string.Empty;
 
-    [JsonPropertyName("sz")]
+    [JsonPropertyName("size")]
     public string Size { get; set; } = string.Empty;
 
     [JsonPropertyName("side")]
     public string Side { get; set; } = string.Empty;
 
     [JsonPropertyName("ts")]
-    public long Timestamp { get; set; }
+    public string Timestamp { get; set; } = string.Empty;
 }
 
 public class DepthData

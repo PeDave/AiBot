@@ -22,7 +22,7 @@ public class OrderBookService
                     Symbol = symbol,
                     Bids = depthData.Bids.Take(depth).Select(ParseLevel).ToList(),
                     Asks = depthData.Asks.Take(depth).Select(ParseLevel).ToList(),
-                    Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(depthData.Timestamp).UtcDateTime
+                    Timestamp = depthData.Timestamp > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(depthData.Timestamp).UtcDateTime : DateTime.UtcNow
                 };
                 
                 lock (_snapshotLock)
