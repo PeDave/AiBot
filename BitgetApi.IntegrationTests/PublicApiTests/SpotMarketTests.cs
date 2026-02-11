@@ -66,7 +66,7 @@ public class SpotMarketTests : TestBase
         Assert.NotNull(response.Data.Asks);
         Assert.NotEmpty(response.Data.Bids);
         Assert.NotEmpty(response.Data.Asks);
-        
+
         var bestBid = response.Data.Bids[0];
         var bestAsk = response.Data.Asks[0];
         Assert.True(bestBid.Count >= 2, "Bid should have at least price and size");
@@ -75,11 +75,21 @@ public class SpotMarketTests : TestBase
         Assert.NotEmpty(bestBid[1]); // Size
         Assert.NotEmpty(bestAsk[0]); // Price
         Assert.NotEmpty(bestAsk[1]); // Size
-        
+
         Log($"✓ Market depth for {TestSymbol}:");
         Log($"  Best Bid: {bestBid[0]} (Size: {bestBid[1]})");
         Log($"  Best Ask: {bestAsk[0]} (Size: {bestAsk[1]})");
-        Log($"  Spread: {double.Parse(bestAsk[0]) - double.Parse(bestBid[0]):F8}");
+
+        // Calculate spread with InvariantCulture
+        var bidPrice = decimal.Parse(bestBid[0],
+            System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture);
+        var askPrice = decimal.Parse(bestAsk[0],
+            System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture);
+        var spread = askPrice - bidPrice;
+
+        Log($"  Spread: ${spread:F8}");
     }
 
     [Fact]
