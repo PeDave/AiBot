@@ -55,17 +55,23 @@ git clone https://github.com/PeDave/AiBot.git
 cd AiBot/BitgetApi.Dashboard
 ```
 
-2. Restore dependencies:
+2. Configure the application:
+```bash
+cp appsettings.json.example appsettings.json
+# Edit appsettings.json with your preferences
+```
+
+3. Restore dependencies:
 ```bash
 dotnet restore
 ```
 
-3. Build the project:
+4. Build the project:
 ```bash
 dotnet build
 ```
 
-4. Run the dashboard:
+5. Run the dashboard:
 ```bash
 dotnet run
 ```

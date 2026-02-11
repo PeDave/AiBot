@@ -1,0 +1,16 @@
+{
+  "Dashboard": {
+    "Symbols": ["BTCUSDT", "ETHUSDT", "XRPUSDT"],
+    "RefreshRateMs": 100,
+    "OrderBookDepth": 5,
+    "TradeHistorySize": 20,
+    "ShowAccountBalance": false,
+    "EnablePriceAlerts": false,
+    "ExportTradesToCsv": false
+  },
+  "Bitget": {
+    "ApiKey": "",
+    "SecretKey": "",
+    "Passphrase": ""
+  }
+}
