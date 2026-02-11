@@ -58,30 +58,35 @@ public class DashboardRenderer
             .BorderColor(Color.Cyan1)
             .Padding(0, 0);
     }
-    
+
     private Panel CreatePricesPanel(PriceTrackerService priceTracker, string[] symbols)
     {
         var table = new Table()
             .Border(TableBorder.Rounded)
             .BorderColor(Color.Grey)
             .HideHeaders();
-        
+
         table.AddColumn("");
         table.AddColumn("");
         table.AddColumn("");
-        
+
         foreach (var symbol in symbols)
         {
             var price = priceTracker.GetPrice(symbol);
+
+            // ✅ ADD DEBUG
+            File.AppendAllText("websocket-debug.log",
+                $"[{DateTime.Now:HH:mm:ss.fff}] DashboardRenderer: GetPrice({symbol}) = {(price == null ? "NULL" : $"${price.LastPrice}")}\n");
+
             if (price != null)
             {
                 var changeColor = price.Change24h >= 0 ? "green" : "red";
                 var arrow = price.Change24h >= 0 ? "▲" : "▼";
                 var symbolDisplay = symbol.Replace("USDT", "");
-                
+
                 table.AddRow(
                     $"[bold]{symbolDisplay}[/]",
-                    $"[bold]${price.Price:N2}[/]",
+                    $"[bold]${price.LastPrice:N2}[/]",
                     $"[{changeColor}]{arrow}{Math.Abs(price.Change24h):F2}%[/]"
                 );
             }
@@ -91,12 +96,12 @@ public class DashboardRenderer
                 table.AddRow($"[bold]{symbolDisplay}[/]", "[dim]...[/]", "[dim]...[/]");
             }
         }
-        
+
         return new Panel(table)
             .Header("[yellow]PRICES[/]")
             .BorderColor(Color.Cyan1);
     }
-    
+
     private Panel CreateTradesPanel(TradeStreamService tradeStream)
     {
         var trades = tradeStream.GetRecentTrades().Take(10).ToList();

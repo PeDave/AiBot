@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 
@@ -130,18 +130,28 @@ public class SpotPublicChannels
         {
             try
             {
+                // ✅ DEBUGGING: Log the RAW message
+                System.Diagnostics.Debug.WriteLine($"[TICKER RAW] {message}");
+
                 var response = JsonSerializer.Deserialize<WebSocketResponse<TickerData>>(message);
+
+                // ✅ DEBUGGING: Log deserialization result
+                System.Diagnostics.Debug.WriteLine($"[TICKER PARSED] Data count: {response?.Data?.Count ?? 0}");
+
                 if (response?.Data != null)
                 {
                     foreach (var data in response.Data)
                     {
+                        System.Diagnostics.Debug.WriteLine($"[TICKER CALLBACK] Symbol={data.Symbol}, Price={data.LastPrice}");
                         callback(data);
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger?.LogWarning(ex, "Error parsing ticker data for {Symbol}", symbol);
+                // ✅ THROW INSTEAD OF SWALLOW!
+                System.Diagnostics.Debug.WriteLine($"[TICKER ERROR] {ex.Message}\n{ex.StackTrace}");
+                throw; // ⬅️ NE NYELD EL A HIBÁT!
             }
         });
     }

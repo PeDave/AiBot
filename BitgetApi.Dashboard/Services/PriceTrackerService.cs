@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Globalization;
 using BitgetApi.Dashboard.Models;
 using BitgetApi.WebSocket.Public;
@@ -8,12 +8,12 @@ namespace BitgetApi.Dashboard.Services;
 public class PriceTrackerService
 {
     private readonly ConcurrentDictionary<string, PriceUpdate> _prices = new();
-    
+
     public event Action<string, PriceUpdate>? OnPriceUpdated;
-    
+
     public async Task SubscribeAsync(string symbol, BitgetApiClient client, CancellationToken cancellationToken = default)
     {
-        await client.SpotPublicChannels.SubscribeTickerAsync(symbol, ticker => 
+        await client.SpotPublicChannels.SubscribeTickerAsync(symbol, ticker =>
         {
             try
             {
@@ -25,8 +25,8 @@ public class PriceTrackerService
                         change24h = ((currentPrice - open24h) / open24h) * 100;
                     }
                 }
-                
-                _prices[symbol] = new PriceUpdate 
+
+                var priceUpdate = new PriceUpdate
                 {
                     Symbol = symbol,
                     LastPrice = decimal.TryParse(ticker.LastPrice, NumberStyles.Any, CultureInfo.InvariantCulture, out var lastPrice) ? lastPrice : 0,
@@ -36,19 +36,20 @@ public class PriceTrackerService
                     Change24h = change24h,
                     Timestamp = ticker.Timestamp > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(ticker.Timestamp).UtcDateTime : DateTime.UtcNow
                 };
-                
+
+                _prices[symbol] = priceUpdate;
+
                 var handler = OnPriceUpdated;
-                handler?.Invoke(symbol, _prices[symbol]);
+                handler?.Invoke(symbol, priceUpdate);
             }
             catch (Exception ex)
             {
-                // Log parsing error but don't crash - continue processing other messages
                 System.Diagnostics.Debug.WriteLine($"Error processing ticker for {symbol}: {ex.Message}");
             }
         }, cancellationToken);
     }
-    
+
     public PriceUpdate? GetPrice(string symbol) => _prices.TryGetValue(symbol, out var price) ? price : null;
-    
+
     public IEnumerable<string> GetSymbols() => _prices.Keys;
 }
