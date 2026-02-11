@@ -60,7 +60,7 @@ public class TickerData
     public string UsdtVolume { get; set; } = string.Empty;
 
     [JsonPropertyName("ts")]
-    public long Timestamp { get; set; }
+    public string Timestamp { get; set; } = string.Empty;
 
     [JsonPropertyName("bidPr")]
     public string BidPrice { get; set; } = string.Empty;
@@ -177,7 +177,31 @@ public class SpotMarketClient
         if (string.IsNullOrWhiteSpace(symbol))
             throw new ArgumentException("Symbol cannot be empty", nameof(symbol));
 
-        return await _httpClient.GetAsync<TickerData>($"/api/v2/spot/market/ticker?symbol={symbol}", requiresAuth: false, cancellationToken);
+        // Get all tickers and filter for the symbol
+        var response = await _httpClient.GetAsync<List<TickerData>>($"/api/v2/spot/market/tickers", requiresAuth: false, cancellationToken);
+
+        if (response.IsSuccess && response.Data != null)
+        {
+            var ticker = response.Data.FirstOrDefault(t => t.Symbol == symbol);
+            if (ticker != null)
+            {
+                return new BitgetResponse<TickerData>
+                {
+                    Code = response.Code,
+                    Message = response.Message,
+                    RequestTime = response.RequestTime,
+                    Data = ticker
+                };
+            }
+        }
+
+        return new BitgetResponse<TickerData>
+        {
+            Code = "40404",
+            Message = $"Symbol {symbol} not found",
+            RequestTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            Data = null
+        };
     }
 
     /// <summary>

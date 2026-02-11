@@ -1,4 +1,4 @@
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 using BitgetApi.Http;
 using BitgetApi.Models;
 
@@ -7,7 +7,10 @@ namespace BitgetApi.RestApi.Common;
 public class ServerTimeResponse
 {
     [JsonPropertyName("serverTime")]
-    public long ServerTime { get; set; }
+    public string ServerTime { get; set; } = string.Empty;  // ✅ String típus
+
+    // Helper property a konverzióhoz
+    public long ServerTimeMilliseconds => long.TryParse(ServerTime, out var value) ? value : 0;
 }
 
 public class AnnouncementResponse

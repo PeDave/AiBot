@@ -903,32 +903,39 @@
     ]
   },
   "packageFolders": {
-    "/home/runner/.nuget/packages/": {}
+    "C:\\Users\\User\\.nuget\\packages\\": {},
+    "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "/home/runner/work/AiBot/AiBot/BitgetApi.Console/BitgetApi.Console.csproj",
+      "projectUniqueName": "D:\\Magán\\AiBot\\BitgetApi.Console\\BitgetApi.Console.csproj",
       "projectName": "BitgetApi.Console",
-      "projectPath": "/home/runner/work/AiBot/AiBot/BitgetApi.Console/BitgetApi.Console.csproj",
-      "packagesPath": "/home/runner/.nuget/packages/",
-      "outputPath": "/home/runner/work/AiBot/AiBot/BitgetApi.Console/obj/",
+      "projectPath": "D:\\Magán\\AiBot\\BitgetApi.Console\\BitgetApi.Console.csproj",
+      "packagesPath": "C:\\Users\\User\\.nuget\\packages\\",
+      "outputPath": "D:\\Magán\\AiBot\\BitgetApi.Console\\obj\\",
       "projectStyle": "PackageReference",
+      "fallbackFolders": [
+        "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+      ],
       "configFilePaths": [
-        "/home/runner/.nuget/NuGet/NuGet.Config"
+        "C:\\Users\\User\\AppData\\Roaming\\NuGet\\NuGet.Config",
+        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
       ],
       "originalTargetFrameworks": [
         "net8.0"
       ],
       "sources": {
+        "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
         "https://api.nuget.org/v3/index.json": {}
       },
       "frameworks": {
         "net8.0": {
           "targetAlias": "net8.0",
           "projectReferences": {
-            "/home/runner/work/AiBot/AiBot/BitgetApi/BitgetApi.csproj": {
-              "projectPath": "/home/runner/work/AiBot/AiBot/BitgetApi/BitgetApi.csproj"
+            "D:\\Magán\\AiBot\\BitgetApi\\BitgetApi.csproj": {
+              "projectPath": "D:\\Magán\\AiBot\\BitgetApi\\BitgetApi.csproj"
             }
           }
         }
@@ -964,7 +971,7 @@
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "/usr/share/dotnet/sdk/10.0.102/PortableRuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.103/PortableRuntimeIdentifierGraph.json"
       }
     }
   }

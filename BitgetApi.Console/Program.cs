@@ -48,7 +48,7 @@ class Program
             if (serverTimeResponse.IsSuccess && serverTimeResponse.Data != null)
             {
                 System.Console.WriteLine($"   Server Time: {serverTimeResponse.Data.ServerTime}");
-                var dateTime = DateTimeOffset.FromUnixTimeMilliseconds(serverTimeResponse.Data.ServerTime);
+                var dateTime = DateTimeOffset.FromUnixTimeMilliseconds(serverTimeResponse.Data.ServerTimeMilliseconds);
                 System.Console.WriteLine($"   Date/Time: {dateTime:yyyy-MM-dd HH:mm:ss} UTC");
             }
             System.Console.WriteLine();
