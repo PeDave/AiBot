@@ -36,7 +36,7 @@ public class TickerData
     public string QuoteVolume { get; set; } = string.Empty;
 
     [JsonPropertyName("ts")]
-    public long Timestamp { get; set; }
+    public string Timestamp { get; set; } = string.Empty;
 }
 
 public class TradeData
@@ -72,7 +72,7 @@ public class DepthData
     public List<List<string>> Bids { get; set; } = new();
 
     [JsonPropertyName("ts")]
-    public long Timestamp { get; set; }
+    public string Timestamp { get; set; } = string.Empty;
 }
 
 public class CandleData
@@ -81,7 +81,7 @@ public class CandleData
     public string Symbol { get; set; } = string.Empty;
 
     [JsonPropertyName("ts")]
-    public long Timestamp { get; set; }
+    public string Timestamp { get; set; } = string.Empty;
 
     [JsonPropertyName("o")]
     public string Open { get; set; } = string.Empty;

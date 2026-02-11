@@ -34,7 +34,9 @@ public class PriceTrackerService
                     Low24h = decimal.TryParse(ticker.Low24h, NumberStyles.Any, CultureInfo.InvariantCulture, out var low) ? low : 0,
                     Volume24h = decimal.TryParse(ticker.BaseVolume, NumberStyles.Any, CultureInfo.InvariantCulture, out var vol) ? vol : 0,
                     Change24h = change24h,
-                    Timestamp = ticker.Timestamp > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(ticker.Timestamp).UtcDateTime : DateTime.UtcNow
+                    Timestamp = !string.IsNullOrEmpty(ticker.Timestamp) && long.TryParse(ticker.Timestamp, out var ts)
+                        ? DateTimeOffset.FromUnixTimeMilliseconds(ts).UtcDateTime
+                        : DateTime.UtcNow
                 };
 
                 _prices[symbol] = priceUpdate;
