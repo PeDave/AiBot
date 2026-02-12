@@ -1,0 +1,97 @@
+@using BitgetApi.Dashboard.Web.Services
+@inject BitgetMarketDataService MarketDataService
+
+<div class="symbol-selector">
+    <div class="tabs">
+        <button class="tab @(activeTab == "SPOT" ? "active" : "")" 
+                @onclick='() => SwitchTab("SPOT")'>
+            SPOT
+        </button>
+        <button class="tab @(activeTab == "FUTURES" ? "active" : "")" 
+                @onclick='() => SwitchTab("FUTURES")'>
+            FUTURES
+        </button>
+    </div>
+    
+    <input type="text" 
+           class="symbol-search" 
+           placeholder="Search symbol..." 
+           @bind="searchTerm"
+           @bind:event="oninput" />
+    
+    <div class="symbol-list">
+        @foreach (var symbol in FilteredSymbols)
+        {
+            <div class="symbol-item @(symbol == SelectedSymbol ? "selected" : "")"
+                 @onclick="() => SelectSymbol(symbol)">
+                <span class="symbol-name">@symbol</span>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback<(string symbol, string productType)> OnSymbolSelected { get; set; }
+    
+    private string activeTab = "SPOT";
+    private string searchTerm = "";
+    private string SelectedSymbol = "";
+    private List<string> spotSymbols = new();
+    private List<string> futuresSymbols = new();
+
+    private IEnumerable<string> FilteredSymbols
+    {
+        get
+        {
+            var symbols = activeTab == "SPOT" ? spotSymbols : futuresSymbols;
+            if (string.IsNullOrWhiteSpace(searchTerm))
+                return symbols.Take(50);
+            
+            return symbols
+                .Where(s => s.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
+                .Take(50);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSymbolsAsync();
+    }
+
+    private async Task LoadSymbolsAsync()
+    {
+        var spotSymbolData = await MarketDataService.GetSpotSymbolsAsync();
+        spotSymbols = spotSymbolData
+            .Where(s => s.Status == "online")
+            .Select(s => s.Symbol)
+            .OrderBy(s => s)
+            .ToList();
+
+        var futuresSymbolData = await MarketDataService.GetFuturesSymbolsAsync();
+        futuresSymbols = futuresSymbolData
+            .Where(s => s.Status == "online")
+            .Select(s => s.Symbol)
+            .OrderBy(s => s)
+            .ToList();
+    }
+
+    private void SwitchTab(string tab)
+    {
+        activeTab = tab;
+        SelectedSymbol = "";
+    }
+
+    private async Task SelectSymbol(string symbol)
+    {
+        try
+        {
+            await OnSymbolSelected.InvokeAsync((symbol, activeTab));
+            // Only update local state after callback succeeds
+            SelectedSymbol = symbol;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error selecting symbol: {ex.Message}");
+        }
+    }
+}

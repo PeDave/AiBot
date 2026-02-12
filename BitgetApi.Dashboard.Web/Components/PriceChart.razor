@@ -1,0 +1,69 @@
+@using BitgetApi.Dashboard.Web.Data.Models
+@inject IJSRuntime JS
+
+<div class="chart-container">
+    <div class="chart-header">
+        <h3>@Symbol - @Interval</h3>
+        <div class="interval-selector">
+            @foreach (var interval in Intervals)
+            {
+                <button class="interval-btn @(interval == SelectedInterval ? "active" : "")" 
+                        @onclick="() => OnIntervalChanged(interval)">
+                    @interval
+                </button>
+            }
+        </div>
+    </div>
+    <canvas id="priceChart" style="max-height: 500px;"></canvas>
+</div>
+
+@code {
+    [Parameter] public string Symbol { get; set; } = "BTCUSDT";
+    [Parameter] public string Interval { get; set; } = "1H";
+    [Parameter] public List<CandleData> Candles { get; set; } = new();
+    [Parameter] public EventCallback<string> OnIntervalChange { get; set; }
+
+    private string[] Intervals = { "15m", "1H", "4H", "1D" };
+    private string SelectedInterval = "1H";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await InitializeChartAsync();
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Candles.Any())
+        {
+            await UpdateChartAsync();
+        }
+    }
+
+    private async Task OnIntervalChanged(string interval)
+    {
+        SelectedInterval = interval;
+        await OnIntervalChange.InvokeAsync(interval);
+    }
+
+    private async Task InitializeChartAsync()
+    {
+        await JS.InvokeVoidAsync("initializeCandlestickChart", "priceChart");
+    }
+
+    private async Task UpdateChartAsync()
+    {
+        var chartData = Candles.Select(c => new
+        {
+            x = c.Timestamp,
+            o = c.Open,
+            h = c.High,
+            l = c.Low,
+            c = c.Close
+        }).ToArray();
+
+        await JS.InvokeVoidAsync("updateCandlestickChart", chartData);
+    }
+}

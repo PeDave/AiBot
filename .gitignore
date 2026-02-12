@@ -43,6 +43,11 @@ appsettings.json
 appsettings.*.json
 !appsettings.json.example
 
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
+
 # Test Results
 [Tt]est[Rr]esult*/
 [Bb]uild[Ll]og.*
