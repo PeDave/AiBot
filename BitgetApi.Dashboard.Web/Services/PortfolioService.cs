@@ -20,93 +20,145 @@ public class PortfolioService
             // Fetch all account data
             var spotTask = _accountService.GetSpotAccountAsync();
             var futuresTask = _accountService.GetFuturesAccountAsync();
+            var futuresBotTask = _accountService.GetFuturesBotAccountAsync();
             var earnTask = _accountService.GetEarnAccountAsync();
             
-            await Task.WhenAll(spotTask, futuresTask, earnTask);
+            await Task.WhenAll(spotTask, futuresTask, futuresBotTask, earnTask);
             
             var spot = await spotTask;
             var futures = await futuresTask;
+            var futuresBot = await futuresBotTask;
             var earn = await earnTask;
             
-            // Calculate Spot balance
+            // ✅ Spot assets - Add each as separate row
             if (spot?.Data != null)
             {
-                summary.SpotBalance = spot.Data
-                    .Sum(a => decimal.TryParse(a.UsdtValue, NumberStyles.Any, CultureInfo.InvariantCulture, out var val) ? val : 0);
-                
-                foreach (var a in spot.Data)
+                foreach (var asset in spot.Data)
                 {
-                    if (decimal.TryParse(a.Available, NumberStyles.Any, CultureInfo.InvariantCulture, out var available) && 
-                        available > 0 &&
-                        decimal.TryParse(a.Frozen, NumberStyles.Any, CultureInfo.InvariantCulture, out var frozen) &&
-                        decimal.TryParse(a.UsdtValue, NumberStyles.Any, CultureInfo.InvariantCulture, out var usdtValue))
+                    if (!decimal.TryParse(asset.Available, NumberStyles.Any, CultureInfo.InvariantCulture, out var available))
+                        continue;
+                    
+                    if (!decimal.TryParse(asset.Frozen, NumberStyles.Any, CultureInfo.InvariantCulture, out var frozen))
+                        frozen = 0;
+                    
+                    if (!decimal.TryParse(asset.UsdtValue, NumberStyles.Any, CultureInfo.InvariantCulture, out var usdtValue))
+                        continue;
+                    
+                    // Skip assets with zero value
+                    if (available <= 0 && frozen <= 0) continue;
+                    
+                    summary.Assets.Add(new AssetBalance
                     {
-                        summary.Assets.Add(new AssetBalance
-                        {
-                            Coin = a.Coin,
-                            Available = available,
-                            Frozen = frozen,
-                            UsdtValue = usdtValue,
-                            Account = "Spot"
-                        });
-                    }
+                        Coin = asset.Coin,
+                        Available = available,
+                        Frozen = frozen,
+                        UsdtValue = usdtValue,
+                        Account = "Spot"
+                    });
+                    
+                    summary.SpotBalance += usdtValue;
                 }
             }
             
-            // Calculate Futures balance
+            // ✅ Futures assets - Add each as separate row
             if (futures?.Data != null)
             {
-                summary.FuturesBalance = futures.Data
-                    .Sum(a => decimal.TryParse(a.UsdtEquity, NumberStyles.Any, CultureInfo.InvariantCulture, out var val) ? val : 0);
-                
-                foreach (var a in futures.Data)
+                foreach (var account in futures.Data)
                 {
-                    if (decimal.TryParse(a.Available, NumberStyles.Any, CultureInfo.InvariantCulture, out var available) &&
-                        decimal.TryParse(a.Frozen, NumberStyles.Any, CultureInfo.InvariantCulture, out var frozen) &&
-                        decimal.TryParse(a.UsdtEquity, NumberStyles.Any, CultureInfo.InvariantCulture, out var usdtEquity) &&
-                        usdtEquity > 0)
+                    if (!decimal.TryParse(account.Available, NumberStyles.Any, CultureInfo.InvariantCulture, out var available))
+                        continue;
+                    
+                    if (!decimal.TryParse(account.Frozen, NumberStyles.Any, CultureInfo.InvariantCulture, out var frozen))
+                        frozen = 0;
+                    
+                    if (!decimal.TryParse(account.UsdtEquity, NumberStyles.Any, CultureInfo.InvariantCulture, out var equity))
+                        continue;
+                    
+                    if (available <= 0 && frozen <= 0) continue;
+                    
+                    summary.Assets.Add(new AssetBalance
                     {
-                        summary.Assets.Add(new AssetBalance
-                        {
-                            Coin = a.MarginCoin,
-                            Available = available,
-                            Frozen = frozen,
-                            UsdtValue = usdtEquity,
-                            Account = "Futures"
-                        });
-                    }
+                        Coin = account.MarginCoin,
+                        Available = available,
+                        Frozen = frozen,
+                        UsdtValue = equity,
+                        Account = "Futures"
+                    });
+                    
+                    summary.FuturesBalance += equity;
                 }
             }
             
-            // Calculate Earn balance
+            // ✅ Futures Bot assets - Add each as separate row
+            if (futuresBot?.Data != null)
+            {
+                foreach (var asset in futuresBot.Data)
+                {
+                    if (!decimal.TryParse(asset.Available, NumberStyles.Any, CultureInfo.InvariantCulture, out var available))
+                        continue;
+                    
+                    if (!decimal.TryParse(asset.Frozen, NumberStyles.Any, CultureInfo.InvariantCulture, out var frozen))
+                        frozen = 0;
+                    
+                    if (!decimal.TryParse(asset.Equity, NumberStyles.Any, CultureInfo.InvariantCulture, out var equity))
+                        continue;
+                    
+                    if (available <= 0 && frozen <= 0) continue;
+                    
+                    summary.Assets.Add(new AssetBalance
+                    {
+                        Coin = asset.Coin,
+                        Available = available,
+                        Frozen = frozen,
+                        UsdtValue = equity,
+                        Account = "Futures Bot"
+                    });
+                    
+                    summary.BotBalance += equity;
+                }
+            }
+            
+            // ✅ Earn assets - Add each as separate row
             if (earn?.Data != null)
             {
-                summary.EarnBalance = earn.Data
-                    .Sum(a => decimal.TryParse(a.UsdtValue, NumberStyles.Any, CultureInfo.InvariantCulture, out var val) ? val : 0);
-                
-                foreach (var a in earn.Data)
+                foreach (var asset in earn.Data)
                 {
-                    if (decimal.TryParse(a.Amount, NumberStyles.Any, CultureInfo.InvariantCulture, out var amount) && 
-                        amount > 0 &&
-                        decimal.TryParse(a.UsdtValue, NumberStyles.Any, CultureInfo.InvariantCulture, out var usdtValue))
+                    if (!decimal.TryParse(asset.Amount, NumberStyles.Any, CultureInfo.InvariantCulture, out var amount))
+                        continue;
+                    
+                    if (!decimal.TryParse(asset.UsdtValue, NumberStyles.Any, CultureInfo.InvariantCulture, out var usdtValue))
+                        continue;
+                    
+                    if (amount <= 0) continue;
+                    
+                    summary.Assets.Add(new AssetBalance
                     {
-                        summary.Assets.Add(new AssetBalance
-                        {
-                            Coin = a.Coin,
-                            Available = amount,
-                            Frozen = 0,
-                            UsdtValue = usdtValue,
-                            Account = "Earn"
-                        });
-                    }
+                        Coin = asset.Coin,
+                        Available = amount,
+                        Frozen = 0,
+                        UsdtValue = usdtValue,
+                        Account = "Earn"
+                    });
+                    
+                    summary.EarnBalance += usdtValue;
                 }
             }
             
-            summary.TotalBalance = summary.SpotBalance + summary.FuturesBalance + summary.EarnBalance;
+            summary.TotalBalance = summary.SpotBalance + summary.FuturesBalance + summary.EarnBalance + summary.BotBalance;
+            
+            // ✅ Sort assets by USD value (descending)
+            summary.Assets = summary.Assets.OrderByDescending(a => a.UsdtValue).ToList();
+            
+            Console.WriteLine($"✅ Portfolio loaded: Total ${summary.TotalBalance:N2}");
+            Console.WriteLine($"   - Spot: ${summary.SpotBalance:N2} ({summary.Assets.Count(a => a.Account == "Spot")} assets)");
+            Console.WriteLine($"   - Futures: ${summary.FuturesBalance:N2} ({summary.Assets.Count(a => a.Account == "Futures")} assets)");
+            Console.WriteLine($"   - Futures Bot: ${summary.BotBalance:N2} ({summary.Assets.Count(a => a.Account == "Futures Bot")} assets)");
+            Console.WriteLine($"   - Earn: ${summary.EarnBalance:N2} ({summary.Assets.Count(a => a.Account == "Earn")} assets)");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error fetching portfolio: {ex.Message}");
+            Console.WriteLine($"❌ Error fetching portfolio: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
             summary.HasError = true;
             summary.ErrorMessage = ex.Message;
         }
