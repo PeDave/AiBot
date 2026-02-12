@@ -1,4 +1,5 @@
-﻿using System.Net.Http.Json;
+﻿using System.Globalization;
+using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 
 namespace BitgetApi.Dashboard.Web.Services;
@@ -119,12 +120,12 @@ public class BitgetMarketDataService
             return response.Data.Select(c => new CandleResponse
             {
                 Timestamp = long.Parse(c[0]),
-                Open = decimal.Parse(c[1]),
-                High = decimal.Parse(c[2]),
-                Low = decimal.Parse(c[3]),
-                Close = decimal.Parse(c[4]),
-                Volume = decimal.Parse(c[5]),
-                QuoteVolume = c.Count > 6 ? decimal.Parse(c[6]) : 0
+                Open = decimal.Parse(c[1], CultureInfo.InvariantCulture),
+                High = decimal.Parse(c[2], CultureInfo.InvariantCulture),
+                Low = decimal.Parse(c[3], CultureInfo.InvariantCulture),
+                Close = decimal.Parse(c[4], CultureInfo.InvariantCulture),
+                Volume = decimal.Parse(c[5], CultureInfo.InvariantCulture),
+                QuoteVolume = c.Count > 6 ? decimal.Parse(c[6], CultureInfo.InvariantCulture) : 0
             }).ToList();
         }
         catch (Exception ex)

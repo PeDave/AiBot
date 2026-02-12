@@ -63,44 +63,62 @@ public class HistoricalDataService
         string interval, 
         string productType = "SPOT")
     {
-        var maxCandles = _maxCandlesByInterval.GetValueOrDefault(interval, DefaultMaxCandles);
-        var totalFetched = 0;
-        var allCandles = new List<CandleData>();
-
-        while (totalFetched < maxCandles)
+        try
         {
-            var candles = await _marketDataService.GetHistoricalCandlesAsync(
-                symbol, 
-                interval, 
-                productType,
-                Math.Min(BitgetApiBatchLimit, maxCandles - totalFetched));
+            Console.WriteLine($"📊 Fetching candles for {symbol} ({productType}) - Interval: {interval}");
+            
+            var maxCandles = _maxCandlesByInterval.GetValueOrDefault(interval, DefaultMaxCandles);
+            var totalFetched = 0;
+            var allCandles = new List<CandleData>();
 
-            if (!candles.Any()) break;
-
-            var candleModels = candles.Select(c => new CandleData
+            while (totalFetched < maxCandles)
             {
-                Symbol = symbol,
-                Interval = interval,
-                Timestamp = c.Timestamp,
-                Open = c.Open,
-                High = c.High,
-                Low = c.Low,
-                Close = c.Close,
-                Volume = c.Volume,
-                QuoteVolume = c.QuoteVolume
-            }).ToList();
+                var candles = await _marketDataService.GetHistoricalCandlesAsync(
+                    symbol, 
+                    interval, 
+                    productType,
+                    Math.Min(BitgetApiBatchLimit, maxCandles - totalFetched));
 
-            await _candleRepository.SaveCandlesAsync(candleModels);
-            allCandles.AddRange(candleModels);
-            totalFetched += candles.Count;
+                if (!candles.Any())
+                {
+                    Console.WriteLine($"⚠️ No more candles available. Total fetched: {totalFetched}");
+                    break;
+                }
 
-            if (candles.Count < BitgetApiBatchLimit) break; // No more data available
+                Console.WriteLine($"✅ Fetched {candles.Count} candles from API");
+
+                var candleModels = candles.Select(c => new CandleData
+                {
+                    Symbol = symbol,
+                    Interval = interval,
+                    Timestamp = c.Timestamp,
+                    Open = c.Open,
+                    High = c.High,
+                    Low = c.Low,
+                    Close = c.Close,
+                    Volume = c.Volume,
+                    QuoteVolume = c.QuoteVolume
+                }).ToList();
+
+                await _candleRepository.SaveCandlesAsync(candleModels);
+                allCandles.AddRange(candleModels);
+                totalFetched += candles.Count;
+
+                if (candles.Count < BitgetApiBatchLimit) break; // No more data available
+            }
+
+            // Cleanup old candles
+            await _candleRepository.CleanupOldCandlesAsync(symbol, interval, maxCandles);
+
+            Console.WriteLine($"✅ Total candles stored: {allCandles.Count} for {symbol} {interval}");
+            return allCandles;
         }
-
-        // Cleanup old candles
-        await _candleRepository.CleanupOldCandlesAsync(symbol, interval, maxCandles);
-
-        return allCandles;
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error in FetchAndStoreCandlesAsync: {ex.Message}");
+            Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
+            return new List<CandleData>();
+        }
     }
 
     private TimeSpan GetIntervalTimeSpan(string interval) => interval switch
