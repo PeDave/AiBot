@@ -1,0 +1,70 @@
+@using BitgetApi.Dashboard.Web.Services
+
+<div class="asset-list">
+    <h3>ASSETS</h3>
+    
+    <div class="filter-bar">
+        <input type="text" 
+               placeholder="Search coin..." 
+               @bind="searchTerm" 
+               @bind:event="oninput" />
+        
+        <select @bind="filterAccount">
+            <option value="All">All Accounts</option>
+            <option value="Spot">Spot</option>
+            <option value="Futures">Futures</option>
+            <option value="Earn">Earn</option>
+        </select>
+    </div>
+    
+    <table class="asset-table">
+        <thead>
+            <tr>
+                <th>Coin</th>
+                <th>Account</th>
+                <th>Available</th>
+                <th>Frozen</th>
+                <th>USD Value</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var asset in FilteredAssets)
+            {
+                <tr>
+                    <td class="coin">@asset.Coin</td>
+                    <td class="account">@asset.Account</td>
+                    <td>@asset.Available.ToString("N8")</td>
+                    <td>@asset.Frozen.ToString("N8")</td>
+                    <td class="usd-value">$@asset.UsdtValue.ToString("N2")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    [Parameter] public List<AssetBalance> Assets { get; set; } = new();
+    
+    private string searchTerm = "";
+    private string filterAccount = "All";
+    
+    private IEnumerable<AssetBalance> FilteredAssets
+    {
+        get
+        {
+            var filtered = Assets.AsEnumerable();
+            
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                filtered = filtered.Where(a => a.Coin.Contains(searchTerm, StringComparison.OrdinalIgnoreCase));
+            }
+            
+            if (filterAccount != "All")
+            {
+                filtered = filtered.Where(a => a.Account == filterAccount);
+            }
+            
+            return filtered.OrderByDescending(a => a.UsdtValue);
+        }
+    }
+}

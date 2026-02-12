@@ -305,3 +305,220 @@ h1 {
         grid-template-columns: 1fr;
     }
 }
+
+/* Wallet Overview */
+.wallet-overview {
+    margin-bottom: 20px;
+}
+
+.total-balance-card {
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    padding: 30px;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.total-balance-card h2 {
+    color: var(--text-secondary);
+    font-size: 16px;
+    margin-bottom: 15px;
+    letter-spacing: 2px;
+}
+
+.total-balance-card .balance {
+    font-size: 48px;
+    font-weight: bold;
+    color: var(--text-primary);
+    margin: 10px 0;
+    text-shadow: 0 0 15px var(--text-primary);
+}
+
+.total-balance-card .change {
+    color: var(--positive);
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.total-balance-card.error {
+    border-color: var(--negative);
+}
+
+.total-balance-card.error h2 {
+    color: var(--negative);
+}
+
+.total-balance-card .error-message {
+    color: var(--negative);
+    font-size: 16px;
+    margin: 15px 0;
+    padding: 15px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+}
+
+.balance-distribution {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+}
+
+.balance-item {
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    transition: transform 0.2s;
+}
+
+.balance-item:hover {
+    transform: translateY(-5px);
+}
+
+.balance-item .label {
+    display: block;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: bold;
+    margin-bottom: 10px;
+    letter-spacing: 1px;
+}
+
+.balance-item .value {
+    display: block;
+    color: var(--text-primary);
+    font-size: 24px;
+    font-weight: bold;
+    margin: 10px 0;
+}
+
+.balance-item .percent {
+    display: block;
+    color: #888;
+    font-size: 14px;
+}
+
+/* Asset List */
+.asset-list {
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.asset-list h3 {
+    color: var(--text-secondary);
+    font-size: 18px;
+    margin-bottom: 15px;
+    letter-spacing: 2px;
+}
+
+.filter-bar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.filter-bar input {
+    flex: 1;
+    padding: 10px;
+    background: var(--bg-primary);
+    border: 2px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-family: 'Consolas', monospace;
+    font-size: 14px;
+}
+
+.filter-bar input:focus {
+    outline: none;
+    border-color: var(--text-secondary);
+}
+
+.filter-bar select {
+    padding: 10px 20px;
+    background: var(--bg-primary);
+    border: 2px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-family: 'Consolas', monospace;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.filter-bar select:focus {
+    outline: none;
+    border-color: var(--text-secondary);
+}
+
+.asset-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.asset-table thead {
+    background: var(--bg-tertiary);
+}
+
+.asset-table th {
+    padding: 12px;
+    text-align: left;
+    color: var(--text-secondary);
+    font-weight: bold;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.asset-table tbody tr {
+    border-bottom: 1px solid var(--bg-tertiary);
+    transition: background 0.2s;
+}
+
+.asset-table tbody tr:hover {
+    background: var(--bg-tertiary);
+}
+
+.asset-table td {
+    padding: 12px;
+    color: var(--text-primary);
+}
+
+.asset-table td.coin {
+    font-weight: bold;
+    color: var(--text-secondary);
+}
+
+.asset-table td.account {
+    color: #888;
+    font-size: 12px;
+}
+
+.asset-table td.usd-value {
+    font-weight: bold;
+    color: var(--text-primary);
+}
+
+.loading {
+    text-align: center;
+    padding: 40px;
+    color: var(--text-secondary);
+    font-size: 18px;
+}
+
+@media (max-width: 1200px) {
+    .balance-distribution {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .balance-distribution {
+        grid-template-columns: 1fr;
+    }
+    
+    .asset-table {
+        font-size: 12px;
+    }
+}

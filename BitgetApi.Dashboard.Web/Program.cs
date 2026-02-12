@@ -3,12 +3,17 @@ using BitgetApi.WebSocket;
 using BitgetApi.Dashboard.Web.Services;
 using BitgetApi.Dashboard.Web.Data;
 using BitgetApi.Dashboard.Web.Data.Repositories;
+using BitgetApi.Config;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
+
+// API Configuration
+builder.Services.Configure<BitgetApiConfig>(
+    builder.Configuration.GetSection("Bitget"));
 
 // Database
 builder.Services.AddDbContext<MarketDataContext>(options =>
@@ -26,6 +31,10 @@ builder.Services.AddSingleton<TradeStreamService>();
 // Market data services
 builder.Services.AddHttpClient<BitgetMarketDataService>();
 builder.Services.AddScoped<HistoricalDataService>();
+
+// Account services
+builder.Services.AddHttpClient<BitgetAccountService>();
+builder.Services.AddScoped<PortfolioService>();
 
 var app = builder.Build();
 
