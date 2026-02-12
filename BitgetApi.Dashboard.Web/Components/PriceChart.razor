@@ -14,7 +14,14 @@
             }
         </div>
     </div>
-    <canvas id="priceChart" style="width: 100%; height: 500px;"></canvas>
+    
+    @* Chart rendering disabled for wallet dashboard *@
+    @* <canvas id="priceChart" style="width: 100%; height: 500px;"></canvas> *@
+    
+    <div style="padding: 40px; text-align: center; color: #666;">
+        <p>Chart view temporarily disabled</p>
+        <p style="font-size: 12px; margin-top: 10px;">Focus on wallet and portfolio dashboard</p>
+    </div>
 </div>
 
 @code {
@@ -24,8 +31,11 @@
     [Parameter] public EventCallback<string> OnIntervalChange { get; set; }
 
     private string[] Intervals = { "15m", "1H", "4H", "1D" };
-    private bool chartInitialized = false;
 
+    // Chart rendering disabled for wallet dashboard
+    /*
+    private bool chartInitialized = false;
+    
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
@@ -42,12 +52,15 @@
             await UpdateChartAsync();
         }
     }
+    */
 
     private async Task OnIntervalChanged(string interval)
     {
         await OnIntervalChange.InvokeAsync(interval);
     }
 
+    // Chart rendering methods disabled for wallet dashboard
+    /*
     private async Task InitializeChartAsync()
     {
         try
@@ -87,4 +100,5 @@
             Console.WriteLine($"Failed to update chart: {ex.Message}");
         }
     }
+    */
 }
