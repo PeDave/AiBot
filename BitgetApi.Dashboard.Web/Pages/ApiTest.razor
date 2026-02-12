@@ -1,0 +1,99 @@
+@page "/apitest"
+@using BitgetApi.Dashboard.Web.Services
+@using System.Text.Json
+@inject BitgetAccountService AccountService
+
+<PageTitle>API Test</PageTitle>
+
+<h3>API Test Page</h3>
+
+<div style="margin-bottom: 20px;">
+    <button class="btn btn-primary" @onclick="TestSpotApi">Test Spot API</button>
+    <button class="btn btn-primary" @onclick="TestFuturesApi">Test Futures API</button>
+    <button class="btn btn-primary" @onclick="TestEarnApi">Test Earn API</button>
+    <button class="btn btn-primary" @onclick="TestFuturesBotApi">Test Futures Bot API</button>
+</div>
+
+@if (!string.IsNullOrEmpty(testResult))
+{
+    <div style="margin-top: 20px;">
+        <h4>Result:</h4>
+        <pre style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;">@testResult</pre>
+    </div>
+}
+
+@code {
+    private string testResult = "";
+    
+    private async Task TestSpotApi()
+    {
+        testResult = "Testing Spot API...";
+        StateHasChanged();
+        
+        try
+        {
+            var result = await AccountService.GetSpotAccountAsync();
+            testResult = JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex)
+        {
+            testResult = $"Error: {ex.Message}\n\nStack trace:\n{ex.StackTrace}";
+        }
+        
+        StateHasChanged();
+    }
+    
+    private async Task TestFuturesApi()
+    {
+        testResult = "Testing Futures API...";
+        StateHasChanged();
+        
+        try
+        {
+            var result = await AccountService.GetFuturesAccountAsync();
+            testResult = JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex)
+        {
+            testResult = $"Error: {ex.Message}\n\nStack trace:\n{ex.StackTrace}";
+        }
+        
+        StateHasChanged();
+    }
+    
+    private async Task TestEarnApi()
+    {
+        testResult = "Testing Earn API...";
+        StateHasChanged();
+        
+        try
+        {
+            var result = await AccountService.GetEarnAccountAsync();
+            testResult = JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex)
+        {
+            testResult = $"Error: {ex.Message}\n\nStack trace:\n{ex.StackTrace}";
+        }
+        
+        StateHasChanged();
+    }
+    
+    private async Task TestFuturesBotApi()
+    {
+        testResult = "Testing Futures Bot API...";
+        StateHasChanged();
+        
+        try
+        {
+            var result = await AccountService.GetFuturesBotAccountAsync();
+            testResult = JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex)
+        {
+            testResult = $"Error: {ex.Message}\n\nStack trace:\n{ex.StackTrace}";
+        }
+        
+        StateHasChanged();
+    }
+}
