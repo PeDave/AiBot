@@ -499,12 +499,12 @@ h1 {
 
 .asset-table .account-spot {
     background: rgba(0, 255, 65, 0.2);
-    color: var(--text-primary);
+    color: #00ff41;
 }
 
 .asset-table .account-futures {
     background: rgba(0, 217, 255, 0.2);
-    color: var(--text-secondary);
+    color: #00d9ff;
 }
 
 .asset-table .account-futures-bot {
