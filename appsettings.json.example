@@ -6,6 +6,10 @@
     "BaseUrl": "https://api.bitget.com",
     "WebSocketUrl": "wss://ws.bitget.com/v2/ws"
   },
+  "Dashboard": {
+    "RefreshIntervalSeconds": 30,
+    "DefaultCurrency": "USDT"
+  },
   "Logging": {
     "LogLevel": {
       "Default": "Information",

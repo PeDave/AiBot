@@ -1,39 +1,28 @@
 @page "/"
 @using BitgetApi.Dashboard.Web.Services
-@using BitgetApi.Dashboard.Web.Data.Models
 @using BitgetApi.Dashboard.Web.Components
+@inject PortfolioService Portfolio
 @inject PriceTrackerService PriceTracker
-@inject OrderBookService OrderBook
-@inject TradeStreamService TradeStream
-@inject HistoricalDataService HistoricalData
 @implements IAsyncDisposable
 
-<PageTitle>Bitget Live Dashboard</PageTitle>
+<PageTitle>Bitget Wallet Dashboard</PageTitle>
 
 <div class="dashboard">
     <h1>BITGET LIVE MARKET DASHBOARD v1.0</h1>
-
+    
     <div class="status-bar">
         <span class="status connected">● Connected</span>
         <span class="uptime">Uptime: @uptime.ToString(@"hh\:mm\:ss")</span>
-        <span class="messages">Messages: @messageCount</span>
+        <span class="last-update">Last update: @lastUpdate.ToString("HH:mm:ss")</span>
     </div>
-
-    <!-- SYMBOL SELECTOR & CHART -->
-    <div class="dashboard-grid">
-        <div class="symbol-selector-panel">
-            <SymbolSelector OnSymbolSelected="HandleSymbolSelected" />
-        </div>
-
-        <div class="chart-panel">
-            <PriceChart Symbol="@selectedSymbol"
-                        Interval="@selectedInterval"
-                        Candles="@candles"
-                        OnIntervalChange="HandleIntervalChange" />
-        </div>
-    </div>
-
-    <!-- PRICES -->
+    
+    <!-- WALLET OVERVIEW -->
+    <WalletOverview Summary="@portfolioSummary" />
+    
+    <!-- ASSET LIST -->
+    <AssetList Assets="@(portfolioSummary?.Assets ?? new List<AssetBalance>())" />
+    
+    <!-- PRICE CARDS -->
     <div class="prices-container">
         @foreach (var symbol in symbols)
         {
@@ -41,149 +30,62 @@
             <PriceCard Symbol="@symbol" Price="@price" />
         }
     </div>
-
-    <!-- ORDER BOOK -->
-    <div class="orderbook-container">
-        <OrderBook Symbol="@selectedSymbol" OrderBookData="@OrderBook.GetOrderBook(selectedSymbol)" />
-    </div>
-
-    <!-- RECENT TRADES -->
-    <div class="trades-container">
-        <RecentTrades Symbol="@selectedSymbol" Trades="@TradeStream.GetRecentTrades(selectedSymbol)" />
-    </div>
-
-    <!-- STATISTICS -->
-    <div class="stats-container">
-        <Statistics Uptime="@uptime" MessageCount="@messageCount" />
-    </div>
 </div>
 
 @code {
     private readonly string[] symbols = { "BTCUSDT", "ETHUSDT", "XRPUSDT" };
-
-    private string selectedSymbol = "BTCUSDT";
-    private string selectedInterval = "1H";
-    private string productType = "SPOT";
-    private List<CandleData> candles = new();
-
+    
+    private PortfolioSummary? portfolioSummary;
     private TimeSpan uptime;
-    private int messageCount;
     private DateTime startTime;
-    private System.Threading.Timer? updateTimer;
-
+    private DateTime lastUpdate;
+    private System.Threading.Timer? refreshTimer;
+    
     protected override async Task OnInitializedAsync()
     {
         startTime = DateTime.Now;
-
-        // Event handlers
+        
+        // Subscribe to price updates
         PriceTracker.OnPriceUpdated += OnDataUpdated;
-        OrderBook.OnOrderBookUpdated += OnDataUpdated;
-        TradeStream.OnTradeReceived += OnDataUpdated;
-
-        // Subscribe to default symbols
         foreach (var symbol in symbols)
         {
             await PriceTracker.SubscribeAsync(symbol);
         }
-
-        await OrderBook.SubscribeAsync("BTCUSDT");
-        await TradeStream.SubscribeAsync("BTCUSDT");
-
-        // Load initial chart data
-        await LoadCandlesAsync();
-
-        // Update timer
-        updateTimer = new System.Threading.Timer(_ =>
+        
+        // Load portfolio
+        await RefreshPortfolioAsync();
+        
+        // Auto-refresh every 30 seconds
+        refreshTimer = new System.Threading.Timer(async _ =>
         {
             uptime = DateTime.Now - startTime;
-            InvokeAsync(StateHasChanged);
-        }, null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
+            await RefreshPortfolioAsync();
+            await InvokeAsync(StateHasChanged);
+        }, null, TimeSpan.Zero, TimeSpan.FromSeconds(30));
     }
-
-    private async Task HandleSymbolSelected((string symbol, string productType) selection)
-    {
-        Console.WriteLine($"==== SYMBOL SELECTED ====");
-        Console.WriteLine($"Symbol: {selection.symbol}");
-        Console.WriteLine($"Product Type: {selection.productType}");
-
-        selectedSymbol = selection.symbol;
-        productType = selection.productType;
-
-        Console.WriteLine($"Loading candles...");
-        await LoadCandlesAsync();
-
-        Console.WriteLine($"Subscribing to WebSocket for {selectedSymbol}...");
-        try
-        {
-            await PriceTracker.SubscribeAsync(selectedSymbol);
-            await OrderBook.SubscribeAsync(selectedSymbol);
-            await TradeStream.SubscribeAsync(selectedSymbol);
-            Console.WriteLine($"✅ WebSocket subscribed to {selectedSymbol}");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"❌ WebSocket subscription failed: {ex.Message}");
-        }
-    }
-
-    private async Task HandleIntervalChange(string interval)
-    {
-        Console.WriteLine($"==== INTERVAL CHANGED ====");
-        Console.WriteLine($"New interval: {interval}");
-
-        selectedInterval = interval;
-        await LoadCandlesAsync();
-    }
-
-    private async Task LoadCandlesAsync()
+    
+    private async Task RefreshPortfolioAsync()
     {
         try
         {
-            Console.WriteLine($"📊 LoadCandlesAsync START");
-            Console.WriteLine($"  - Symbol: {selectedSymbol}");
-            Console.WriteLine($"  - Interval: {selectedInterval}");
-            Console.WriteLine($"  - ProductType: {productType}");
-
-            candles = await HistoricalData.GetOrFetchCandlesAsync(
-                selectedSymbol,
-                selectedInterval,
-                productType);
-
-            Console.WriteLine($"✅ Loaded {candles.Count} candles");
-
-            if (candles.Any())
-            {
-                var first = candles.First();
-                var last = candles.Last();
-                Console.WriteLine($"  First: {DateTimeOffset.FromUnixTimeMilliseconds(first.Timestamp):yyyy-MM-dd HH:mm} | O:{first.Open} H:{first.High} L:{first.Low} C:{first.Close}");
-                Console.WriteLine($"  Last:  {DateTimeOffset.FromUnixTimeMilliseconds(last.Timestamp):yyyy-MM-dd HH:mm} | O:{last.Open} H:{last.High} L:{last.Low} C:{last.Close}");
-            }
-            else
-            {
-                Console.WriteLine($"⚠️ NO CANDLES RETURNED!");
-            }
-
-            StateHasChanged();
+            portfolioSummary = await Portfolio.GetPortfolioSummaryAsync();
+            lastUpdate = DateTime.Now;
+            Console.WriteLine($"Portfolio refreshed: Total ${portfolioSummary.TotalBalance:N2}");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ LoadCandlesAsync ERROR: {ex.Message}");
-            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            Console.WriteLine($"Error refreshing portfolio: {ex.Message}");
         }
     }
-
+    
     private void OnDataUpdated()
     {
-        messageCount++;
         InvokeAsync(StateHasChanged);
     }
-
+    
     public async ValueTask DisposeAsync()
     {
         PriceTracker.OnPriceUpdated -= OnDataUpdated;
-        OrderBook.OnOrderBookUpdated -= OnDataUpdated;
-        TradeStream.OnTradeReceived -= OnDataUpdated;
-
-        updateTimer?.Dispose();
+        refreshTimer?.Dispose();
     }
 }
