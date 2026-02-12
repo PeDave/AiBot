@@ -7,14 +7,14 @@
         <div class="interval-selector">
             @foreach (var interval in Intervals)
             {
-                <button class="interval-btn @(interval == SelectedInterval ? "active" : "")" 
+                <button class="interval-btn @(interval == Interval ? "active" : "")" 
                         @onclick="() => OnIntervalChanged(interval)">
                     @interval
                 </button>
             }
         </div>
     </div>
-    <canvas id="priceChart" style="max-height: 500px;"></canvas>
+    <canvas id="priceChart" style="width: 100%; height: 500px;"></canvas>
 </div>
 
 @code {
@@ -24,19 +24,20 @@
     [Parameter] public EventCallback<string> OnIntervalChange { get; set; }
 
     private string[] Intervals = { "15m", "1H", "4H", "1D" };
-    private string SelectedInterval = "1H";
+    private bool chartInitialized = false;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
+            await Task.Delay(500); // Wait for Chart.js to load
             await InitializeChartAsync();
         }
     }
 
     protected override async Task OnParametersSetAsync()
     {
-        if (Candles.Any())
+        if (chartInitialized && Candles.Any())
         {
             await UpdateChartAsync();
         }
@@ -44,28 +45,46 @@
 
     private async Task OnIntervalChanged(string interval)
     {
-        SelectedInterval = interval;
         await OnIntervalChange.InvokeAsync(interval);
     }
 
     private async Task InitializeChartAsync()
     {
-        await JS.InvokeVoidAsync("initializeCandlestickChart", "priceChart");
+        try
+        {
+            await JS.InvokeVoidAsync("initializeCandlestickChart", "priceChart");
+            chartInitialized = true;
+            
+            if (Candles.Any())
+            {
+                await UpdateChartAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to initialize chart: {ex.Message}");
+        }
     }
 
     private async Task UpdateChartAsync()
     {
-        if (!Candles.Any()) return;
-
-        var chartData = Candles.Select(c => new
+        try
         {
-            x = c.Timestamp, // ✅ Already Unix timestamp in milliseconds
-            o = (double)c.Open,
-            h = (double)c.High,
-            l = (double)c.Low,
-            c = (double)c.Close
-        }).ToArray();
+            var chartData = Candles.Select(c => new
+            {
+                x = c.Timestamp,
+                o = (double)c.Open,
+                h = (double)c.High,
+                l = (double)c.Low,
+                c = (double)c.Close
+            }).ToArray();
 
-        await JS.InvokeVoidAsync("updateCandlestickChart", chartData);
+            Console.WriteLine($"Sending {chartData.Length} candles to chart");
+            await JS.InvokeVoidAsync("updateCandlestickChart", chartData);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to update chart: {ex.Message}");
+        }
     }
 }
