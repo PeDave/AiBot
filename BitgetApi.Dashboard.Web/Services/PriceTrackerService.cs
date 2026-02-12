@@ -1,0 +1,80 @@
+using BitgetApi.WebSocket;
+using BitgetApi.WebSocket.Public;
+using System.Globalization;
+using Microsoft.Extensions.Logging;
+
+namespace BitgetApi.Dashboard.Web.Services;
+
+public class PriceTrackerService
+{
+    private readonly BitgetWebSocketClient _client;
+    private readonly ILogger<PriceTrackerService>? _logger;
+    private readonly Dictionary<string, PriceData> _prices = new();
+    private SpotPublicChannels? _spotChannels;
+    
+    public event Action? OnPriceUpdated;
+    
+    public PriceTrackerService(BitgetWebSocketClient client, ILogger<PriceTrackerService>? logger = null)
+    {
+        _client = client;
+        _logger = logger;
+    }
+    
+    public async Task InitializeAsync()
+    {
+        if (_spotChannels == null)
+        {
+            await _client.ConnectPublicAsync();
+            _spotChannels = new SpotPublicChannels(_client);
+        }
+    }
+    
+    public async Task SubscribeAsync(string symbol)
+    {
+        if (_spotChannels == null)
+            await InitializeAsync();
+        
+        await _spotChannels!.SubscribeTickerAsync(symbol, ticker =>
+        {
+            if (decimal.TryParse(ticker.LastPrice, NumberStyles.Any, CultureInfo.InvariantCulture, out var price))
+            {
+                decimal? change24h = null;
+                if (decimal.TryParse(ticker.Open24h, NumberStyles.Any, CultureInfo.InvariantCulture, out var open) && open > 0)
+                {
+                    change24h = ((price - open) / open) * 100;
+                }
+                else
+                {
+                    _logger?.LogWarning("Could not calculate 24h change for {Symbol}: Open24h not available or zero", symbol);
+                }
+                
+                _prices[symbol] = new PriceData
+                {
+                    Symbol = symbol,
+                    Price = price,
+                    Change24h = change24h,
+                    Volume = decimal.TryParse(ticker.BaseVolume, NumberStyles.Any, CultureInfo.InvariantCulture, out var vol) ? vol : 0,
+                    High24h = decimal.TryParse(ticker.High24h, NumberStyles.Any, CultureInfo.InvariantCulture, out var high) ? high : 0,
+                    Low24h = decimal.TryParse(ticker.Low24h, NumberStyles.Any, CultureInfo.InvariantCulture, out var low) ? low : 0
+                };
+                
+                OnPriceUpdated?.Invoke();
+            }
+        });
+    }
+    
+    public PriceData? GetPrice(string symbol) 
+        => _prices.TryGetValue(symbol, out var price) ? price : null;
+    
+    public IEnumerable<string> GetSymbols() => _prices.Keys;
+}
+
+public record PriceData
+{
+    public string Symbol { get; init; } = "";
+    public decimal Price { get; init; }
+    public decimal? Change24h { get; init; }
+    public decimal Volume { get; init; }
+    public decimal High24h { get; init; }
+    public decimal Low24h { get; init; }
+}

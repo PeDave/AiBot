@@ -1,0 +1,39 @@
+@using BitgetApi.Dashboard.Web.Services
+
+<div class="recent-trades">
+    <h3>RECENT TRADES</h3>
+    
+    <div class="trades-list">
+        @if (Trades.Any())
+        {
+            @foreach (var trade in Trades.Take(10))
+            {
+                <div class="trade @GetSideCssClass(trade.Side)">
+                    <span class="time">@trade.Timestamp.ToString("HH:mm:ss")</span>
+                    <span class="side @GetSideCssClass(trade.Side)">@trade.Side</span>
+                    <span class="price">@trade.Price.ToString("N2")</span>
+                    <span class="size">@trade.Size.ToString("N4")</span>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="loading">Waiting for trades...</div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Symbol { get; set; } = "";
+    [Parameter] public IEnumerable<TradeData> Trades { get; set; } = Enumerable.Empty<TradeData>();
+    
+    private string GetSideCssClass(string side)
+    {
+        return side?.ToLowerInvariant() switch
+        {
+            "buy" => "buy",
+            "sell" => "sell",
+            _ => ""
+        };
+    }
+}

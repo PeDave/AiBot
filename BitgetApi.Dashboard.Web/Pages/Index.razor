@@ -1,0 +1,91 @@
+@page "/"
+@using BitgetApi.Dashboard.Web.Services
+@inject PriceTrackerService PriceTracker
+@inject OrderBookService OrderBook
+@inject TradeStreamService TradeStream
+@implements IAsyncDisposable
+
+<PageTitle>Bitget Live Dashboard</PageTitle>
+
+<div class="dashboard">
+    <h1>BITGET LIVE MARKET DASHBOARD v1.0</h1>
+    
+    <div class="status-bar">
+        <span class="status connected">● Connected</span>
+        <span class="uptime">Uptime: @uptime.ToString(@"hh\:mm\:ss")</span>
+        <span class="messages">Messages: @messageCount</span>
+    </div>
+    
+    <!-- PRICES -->
+    <div class="prices-container">
+        @foreach (var symbol in symbols)
+        {
+            var price = PriceTracker.GetPrice(symbol);
+            <PriceCard Symbol="@symbol" Price="@price" />
+        }
+    </div>
+    
+    <!-- ORDER BOOK -->
+    <div class="orderbook-container">
+        <OrderBook Symbol="BTCUSDT" OrderBookData="@OrderBook.GetOrderBook("BTCUSDT")" />
+    </div>
+    
+    <!-- RECENT TRADES -->
+    <div class="trades-container">
+        <RecentTrades Symbol="BTCUSDT" Trades="@TradeStream.GetRecentTrades("BTCUSDT")" />
+    </div>
+    
+    <!-- STATISTICS -->
+    <div class="stats-container">
+        <Statistics Uptime="@uptime" MessageCount="@messageCount" />
+    </div>
+</div>
+
+@code {
+    private readonly string[] symbols = { "BTCUSDT", "ETHUSDT", "XRPUSDT" };
+    private TimeSpan uptime;
+    private int messageCount;
+    private DateTime startTime;
+    private System.Threading.Timer? updateTimer;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        startTime = DateTime.Now;
+        
+        // Event handlers
+        PriceTracker.OnPriceUpdated += OnDataUpdated;
+        OrderBook.OnOrderBookUpdated += OnDataUpdated;
+        TradeStream.OnTradeReceived += OnDataUpdated;
+        
+        // Subscribe to symbols
+        foreach (var symbol in symbols)
+        {
+            await PriceTracker.SubscribeAsync(symbol);
+        }
+        
+        await OrderBook.SubscribeAsync("BTCUSDT");
+        await TradeStream.SubscribeAsync("BTCUSDT");
+        
+        // Update timer
+        updateTimer = new System.Threading.Timer(_ =>
+        {
+            uptime = DateTime.Now - startTime;
+            InvokeAsync(StateHasChanged);
+        }, null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
+    }
+    
+    private void OnDataUpdated()
+    {
+        messageCount++;
+        InvokeAsync(StateHasChanged);
+    }
+    
+    public async ValueTask DisposeAsync()
+    {
+        PriceTracker.OnPriceUpdated -= OnDataUpdated;
+        OrderBook.OnOrderBookUpdated -= OnDataUpdated;
+        TradeStream.OnTradeReceived -= OnDataUpdated;
+        
+        updateTimer?.Dispose();
+    }
+}

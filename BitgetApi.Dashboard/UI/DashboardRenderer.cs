@@ -1,15 +1,18 @@
 using BitgetApi.Dashboard.Models;
 using BitgetApi.Dashboard.Services;
 using Spectre.Console;
+using Microsoft.Extensions.Logging;
 
 namespace BitgetApi.Dashboard.UI;
 
 public class DashboardRenderer
 {
     private readonly Layout _layout;
+    private readonly ILogger<DashboardRenderer>? _logger;
     
-    public DashboardRenderer()
+    public DashboardRenderer(ILogger<DashboardRenderer>? logger = null)
     {
+        _logger = logger;
         _layout = new Layout("Root")
             .SplitRows(
                 new Layout("Header").Size(3),
@@ -74,9 +77,8 @@ public class DashboardRenderer
         {
             var price = priceTracker.GetPrice(symbol);
 
-            // ✅ ADD DEBUG
-            File.AppendAllText("websocket-debug.log",
-                $"[{DateTime.Now:HH:mm:ss.fff}] DashboardRenderer: GetPrice({symbol}) = {(price == null ? "NULL" : $"${price.LastPrice}")}\n");
+            _logger?.LogDebug("DashboardRenderer: GetPrice({Symbol}) = {Price}", 
+                symbol, price == null ? "NULL" : $"${price.LastPrice}");
 
             if (price != null)
             {

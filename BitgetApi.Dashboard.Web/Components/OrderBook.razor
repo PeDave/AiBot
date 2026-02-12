@@ -1,0 +1,45 @@
+@using BitgetApi.Dashboard.Web.Services
+
+<div class="orderbook">
+    <h3>ORDER BOOK - BTCUSDT</h3>
+    
+    @if (OrderBookData != null)
+    {
+        <div class="orderbook-grid">
+            <div class="asks">
+                <div class="header">ASKS (SELL)</div>
+                @foreach (var ask in OrderBookData.Asks.Take(10))
+                {
+                    <div class="order-level ask">
+                        <span class="price">@ask.Price.ToString("N2")</span>
+                        <span class="size">@ask.Size.ToString("N4")</span>
+                    </div>
+                }
+            </div>
+            
+            <div class="bids">
+                <div class="header">BIDS (BUY)</div>
+                @foreach (var bid in OrderBookData.Bids.Take(10))
+                {
+                    <div class="order-level bid">
+                        <span class="price">@bid.Price.ToString("N2")</span>
+                        <span class="size">@bid.Size.ToString("N4")</span>
+                    </div>
+                }
+            </div>
+        </div>
+        
+        <div class="update-time">
+            Last update: @OrderBookData.LastUpdate.ToString("HH:mm:ss.fff")
+        </div>
+    }
+    else
+    {
+        <div class="loading">Waiting for order book data...</div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Symbol { get; set; } = "";
+    [Parameter] public OrderBookData? OrderBookData { get; set; }
+}
