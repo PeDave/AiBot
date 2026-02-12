@@ -4,7 +4,8 @@
     "SecretKey": "your-secret-key-here",
     "Passphrase": "your-passphrase-here",
     "BaseUrl": "https://api.bitget.com",
-    "WebSocketUrl": "wss://ws.bitget.com/v2/ws"
+    "WebSocketUrl": "wss://ws.bitget.com/v2/ws",
+    "EnableDebugLogging": true
   },
   "Dashboard": {
     "RefreshIntervalSeconds": 30,
