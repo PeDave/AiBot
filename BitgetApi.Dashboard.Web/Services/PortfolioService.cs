@@ -113,6 +113,56 @@ public class PortfolioService
         
         return summary;
     }
+
+    public async Task<PortfolioSummary> GetMockPortfolioAsync()
+    {
+        var summary = new PortfolioSummary
+        {
+            SpotBalance = 1040.62m,
+            FuturesBalance = 0m,
+            EarnBalance = 0m,
+            BotBalance = 0m,
+            TotalBalance = 1664.47m
+        };
+
+        summary.Assets.Add(new AssetBalance
+        {
+            Coin = "USDT",
+            Account = "Spot",
+            Available = 1040.62m,
+            Frozen = 0m,
+            UsdtValue = 1040.62m
+        });
+
+        summary.Assets.Add(new AssetBalance
+        {
+            Coin = "BTC",
+            Account = "Spot",
+            Available = 0.00503089m,
+            Frozen = 0m,
+            UsdtValue = 330.73m
+        });
+
+        summary.Assets.Add(new AssetBalance
+        {
+            Coin = "ETH",
+            Account = "Spot",
+            Available = 0.10016975m,
+            Frozen = 0m,
+            UsdtValue = 192.43m
+        });
+
+        summary.Assets.Add(new AssetBalance
+        {
+            Coin = "USDC",
+            Account = "Spot",
+            Available = 100.05m,
+            Frozen = 0m,
+            UsdtValue = 100.05m
+        });
+
+        return summary;
+    }
 }
 
 public class PortfolioSummary

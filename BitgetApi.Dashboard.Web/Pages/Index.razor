@@ -78,33 +78,23 @@
     }
     
     private async Task RefreshPortfolioAsync()
+{
+    try
     {
-        if (isRefreshing) return;
+        // ⚠️ TEMPORARY: Use mock data
+        portfolioSummary = await Portfolio.GetMockPortfolioAsync();
         
-        isRefreshing = true;
-        try
-        {
-            portfolioSummary = await Portfolio.GetPortfolioSummaryAsync();
-            lastUpdate = DateTime.Now;
-            
-            if (!portfolioSummary.HasError)
-            {
-                Console.WriteLine($"Portfolio refreshed: Total ${portfolioSummary.TotalBalance:N2}");
-            }
-            else
-            {
-                Console.WriteLine($"Portfolio refresh failed: {portfolioSummary.ErrorMessage}");
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error refreshing portfolio: {ex.Message}");
-        }
-        finally
-        {
-            isRefreshing = false;
-        }
+        // REAL API (commented out for now):
+        // portfolioSummary = await Portfolio.GetPortfolioSummaryAsync();
+        
+        lastUpdate = DateTime.Now;
+        Console.WriteLine($"Portfolio refreshed: Total ${portfolioSummary.TotalBalance:N2}");
     }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error refreshing portfolio: {ex.Message}");
+    }
+}
     
     private void OnDataUpdated()
     {
