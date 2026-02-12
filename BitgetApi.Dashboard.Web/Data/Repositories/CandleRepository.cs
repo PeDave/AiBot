@@ -32,14 +32,22 @@ public class CandleRepository : ICandleRepository
 
     public async Task SaveCandlesAsync(List<CandleData> candles)
     {
+        if (!candles.Any()) return;
+
+        // Load all existing candles for this symbol/interval upfront to avoid N+1 queries
+        var symbol = candles.First().Symbol;
+        var interval = candles.First().Interval;
+        var timestamps = candles.Select(c => c.Timestamp).ToList();
+        
+        var existingCandles = await _context.Candles
+            .Where(c => c.Symbol == symbol 
+                && c.Interval == interval 
+                && timestamps.Contains(c.Timestamp))
+            .ToDictionaryAsync(c => c.Timestamp);
+
         foreach (var candle in candles)
         {
-            var existing = await _context.Candles
-                .FirstOrDefaultAsync(c => c.Symbol == candle.Symbol 
-                    && c.Interval == candle.Interval 
-                    && c.Timestamp == candle.Timestamp);
-
-            if (existing != null)
+            if (existingCandles.TryGetValue(candle.Timestamp, out var existing))
             {
                 existing.Open = candle.Open;
                 existing.High = candle.High;

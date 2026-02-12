@@ -75,7 +75,7 @@
             .ToList();
     }
 
-    private async Task SwitchTab(string tab)
+    private void SwitchTab(string tab)
     {
         activeTab = tab;
         SelectedSymbol = "";
@@ -83,7 +83,15 @@
 
     private async Task SelectSymbol(string symbol)
     {
-        SelectedSymbol = symbol;
-        await OnSymbolSelected.InvokeAsync((symbol, activeTab));
+        try
+        {
+            await OnSymbolSelected.InvokeAsync((symbol, activeTab));
+            // Only update local state after callback succeeds
+            SelectedSymbol = symbol;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error selecting symbol: {ex.Message}");
+        }
     }
 }

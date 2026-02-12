@@ -8,12 +8,16 @@ public class HistoricalDataService
 {
     private readonly BitgetMarketDataService _marketDataService;
     private readonly ICandleRepository _candleRepository;
+    private const int DefaultMaxCandles = 5000;
+    private const int DailyMaxCandles = 730; // 2 years
+    private const int BitgetApiBatchLimit = 200; // Bitget API limit
+    
     private readonly Dictionary<string, int> _maxCandlesByInterval = new()
     {
-        { "15m", 5000 },
-        { "1H", 5000 },
-        { "4H", 5000 },
-        { "1D", 730 } // 2 years
+        { "15m", DefaultMaxCandles },
+        { "1H", DefaultMaxCandles },
+        { "4H", DefaultMaxCandles },
+        { "1D", DailyMaxCandles }
     };
 
     public HistoricalDataService(
@@ -56,8 +60,7 @@ public class HistoricalDataService
         string interval, 
         string productType = "SPOT")
     {
-        var maxCandles = _maxCandlesByInterval.GetValueOrDefault(interval, 5000);
-        var batchSize = 200; // Bitget API limit
+        var maxCandles = _maxCandlesByInterval.GetValueOrDefault(interval, DefaultMaxCandles);
         var totalFetched = 0;
         var allCandles = new List<CandleData>();
 
@@ -67,7 +70,7 @@ public class HistoricalDataService
                 symbol, 
                 interval, 
                 productType,
-                Math.Min(batchSize, maxCandles - totalFetched));
+                Math.Min(BitgetApiBatchLimit, maxCandles - totalFetched));
 
             if (!candles.Any()) break;
 
@@ -88,7 +91,7 @@ public class HistoricalDataService
             allCandles.AddRange(candleModels);
             totalFetched += candles.Count;
 
-            if (candles.Count < batchSize) break; // No more data available
+            if (candles.Count < BitgetApiBatchLimit) break; // No more data available
         }
 
         // Cleanup old candles
