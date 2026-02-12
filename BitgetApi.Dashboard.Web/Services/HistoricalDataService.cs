@@ -1,4 +1,4 @@
-using BitgetApi.Dashboard.Web.Data;
+﻿using BitgetApi.Dashboard.Web.Data;
 using BitgetApi.Dashboard.Web.Data.Models;
 using BitgetApi.Dashboard.Web.Data.Repositories;
 
@@ -29,30 +29,33 @@ public class HistoricalDataService
     }
 
     public async Task<List<CandleData>> GetOrFetchCandlesAsync(
-        string symbol, 
-        string interval, 
-        string productType = "SPOT")
+    string symbol,
+    string interval,
+    string productType = "SPOT")
     {
-        // Try to get from DB first
         var maxCandles = _maxCandlesByInterval.GetValueOrDefault(interval, 5000);
         var dbCandles = await _candleRepository.GetCandlesAsync(symbol, interval, maxCount: maxCandles);
 
-        // If we have recent data, return it
-        if (dbCandles.Any())
+        // ✅ FIX: Ha nincs adat a DB-ben, azonnal hívjuk az API-t
+        if (!dbCandles.Any())
         {
-            var latestCandle = dbCandles.MaxBy(c => c.Timestamp);
-            var latestTime = DateTimeOffset.FromUnixTimeMilliseconds(latestCandle!.Timestamp).UtcDateTime;
-            
-            // If latest candle is less than interval old, return cached data
-            if (DateTime.UtcNow - latestTime < GetIntervalTimeSpan(interval))
-            {
-                return dbCandles;
-            }
+            Console.WriteLine($"No candles in DB for {symbol} {interval}, fetching from API...");
+            return await FetchAndStoreCandlesAsync(symbol, interval, productType);
         }
 
-        // Fetch fresh data from API
-        var freshCandles = await FetchAndStoreCandlesAsync(symbol, interval, productType);
-        return freshCandles;
+        // Ha van adat, ellenőrizzük hogy friss-e
+        var latestCandle = dbCandles.MaxBy(c => c.Timestamp);
+        var latestTime = DateTimeOffset.FromUnixTimeMilliseconds(latestCandle!.Timestamp).UtcDateTime;
+
+        // Ha az utolsó candle régebbi mint az interval, frissítsük
+        if (DateTime.UtcNow - latestTime > GetIntervalTimeSpan(interval))
+        {
+            Console.WriteLine($"Candles for {symbol} {interval} are outdated, fetching fresh data...");
+            return await FetchAndStoreCandlesAsync(symbol, interval, productType);
+        }
+
+        Console.WriteLine($"Returning {dbCandles.Count} cached candles for {symbol} {interval}");
+        return dbCandles;
     }
 
     public async Task<List<CandleData>> FetchAndStoreCandlesAsync(

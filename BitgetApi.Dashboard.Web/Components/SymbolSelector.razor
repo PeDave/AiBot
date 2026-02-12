@@ -1,41 +1,55 @@
-@using BitgetApi.Dashboard.Web.Services
+﻿@using BitgetApi.Dashboard.Web.Services
 @inject BitgetMarketDataService MarketDataService
 
 <div class="symbol-selector">
     <div class="tabs">
-        <button class="tab @(activeTab == "SPOT" ? "active" : "")" 
+        <button class="tab @(activeTab == "SPOT" ? "active" : "")"
                 @onclick='() => SwitchTab("SPOT")'>
             SPOT
         </button>
-        <button class="tab @(activeTab == "FUTURES" ? "active" : "")" 
+        <button class="tab @(activeTab == "FUTURES" ? "active" : "")"
                 @onclick='() => SwitchTab("FUTURES")'>
             FUTURES
         </button>
     </div>
-    
-    <input type="text" 
-           class="symbol-search" 
-           placeholder="Search symbol..." 
+
+    <input type="text"
+           id="symbol-search"
+           name="symbol-search"
+           class="symbol-search"
+           placeholder="Search symbol..."
            @bind="searchTerm"
            @bind:event="oninput" />
-    
+
     <div class="symbol-list">
-        @foreach (var symbol in FilteredSymbols)
+        @if (isLoading)
         {
-            <div class="symbol-item @(symbol == SelectedSymbol ? "selected" : "")"
-                 @onclick="() => SelectSymbol(symbol)">
-                <span class="symbol-name">@symbol</span>
-            </div>
+            <div class="loading-message">Loading symbols...</div>
+        }
+        else if (!FilteredSymbols.Any())
+        {
+            <div class="no-results">No symbols found</div>
+        }
+        else
+        {
+            @foreach (var symbol in FilteredSymbols)
+            {
+                <div class="symbol-item @(symbol == SelectedSymbol ? "selected" : "")"
+                     @onclick="() => SelectSymbol(symbol)">
+                    <span class="symbol-name">@symbol</span>
+                </div>
+            }
         }
     </div>
 </div>
 
 @code {
     [Parameter] public EventCallback<(string symbol, string productType)> OnSymbolSelected { get; set; }
-    
+
     private string activeTab = "SPOT";
     private string searchTerm = "";
     private string SelectedSymbol = "";
+    private bool isLoading = true;
     private List<string> spotSymbols = new();
     private List<string> futuresSymbols = new();
 
@@ -46,7 +60,7 @@
             var symbols = activeTab == "SPOT" ? spotSymbols : futuresSymbols;
             if (string.IsNullOrWhiteSpace(searchTerm))
                 return symbols.Take(50);
-            
+
             return symbols
                 .Where(s => s.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
                 .Take(50);
@@ -60,38 +74,65 @@
 
     private async Task LoadSymbolsAsync()
     {
-        var spotSymbolData = await MarketDataService.GetSpotSymbolsAsync();
-        spotSymbols = spotSymbolData
-            .Where(s => s.Status == "online")
-            .Select(s => s.Symbol)
-            .OrderBy(s => s)
-            .ToList();
+        try
+        {
+            isLoading = true;
+            StateHasChanged();
 
-        var futuresSymbolData = await MarketDataService.GetFuturesSymbolsAsync();
-        futuresSymbols = futuresSymbolData
-            .Where(s => s.Status == "online")
-            .Select(s => s.Symbol)
-            .OrderBy(s => s)
-            .ToList();
+            // Load SPOT symbols
+            var spotData = await MarketDataService.GetSpotSymbolsAsync();
+            spotSymbols = spotData
+                .Where(s => s.Status == "online" || s.Status == "1")
+                .Select(s => s.Symbol)
+                .OrderBy(s => s)
+                .ToList();
+
+            Console.WriteLine($"✅ Loaded {spotSymbols.Count} SPOT symbols");
+
+            // Load FUTURES symbols
+            var futuresData = await MarketDataService.GetFuturesSymbolsAsync();
+            futuresSymbols = futuresData
+                .Where(s => s.Status == "online" || s.Status == "1" || s.Status == "normal")
+                .Select(s => s.Symbol)
+                .OrderBy(s => s)
+                .ToList();
+
+            Console.WriteLine($"✅ Loaded {futuresSymbols.Count} FUTURES symbols");
+
+            isLoading = false;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error loading symbols: {ex.Message}");
+
+            // Fallback to hardcoded list
+            spotSymbols = new List<string>
+            {
+                "BTCUSDT", "ETHUSDT", "XRPUSDT", "SOLUSDT", "ADAUSDT",
+                "DOGEUSDT", "MATICUSDT", "DOTUSDT", "LTCUSDT", "LINKUSDT"
+            };
+            futuresSymbols = new List<string>
+            {
+                "BTCUSDT", "ETHUSDT", "XRPUSDT", "SOLUSDT", "ADAUSDT"
+            };
+
+            isLoading = false;
+            StateHasChanged();
+        }
     }
 
-    private void SwitchTab(string tab)
+    private async Task SwitchTab(string tab)
     {
         activeTab = tab;
-        SelectedSymbol = "";
+        searchTerm = "";
+        StateHasChanged();
     }
 
     private async Task SelectSymbol(string symbol)
     {
-        try
-        {
-            await OnSymbolSelected.InvokeAsync((symbol, activeTab));
-            // Only update local state after callback succeeds
-            SelectedSymbol = symbol;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error selecting symbol: {ex.Message}");
-        }
+        SelectedSymbol = symbol;
+        Console.WriteLine($"📊 Selected symbol: {symbol} ({activeTab})");
+        await OnSymbolSelected.InvokeAsync((symbol, activeTab));
     }
 }
