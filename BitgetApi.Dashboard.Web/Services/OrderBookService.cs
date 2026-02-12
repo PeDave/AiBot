@@ -32,41 +32,41 @@ public class OrderBookService
     {
         if (_spotChannels == null)
             await InitializeAsync();
-        
+
         await _spotChannels!.SubscribeDepthAsync(symbol, depth, depthData =>
         {
-            var asks = depthData.Asks.Select(a => new OrderLevel
+            try
             {
-                Price = decimal.Parse(a[0]),
-                Size = decimal.Parse(a[1])
-            }).ToList();
-            
-            var bids = depthData.Bids.Select(b => new OrderLevel
-            {
-                Price = decimal.Parse(b[0]),
-                Size = decimal.Parse(b[1])
-            }).ToList();
-            
-            DateTime lastUpdate;
-            if (!string.IsNullOrEmpty(depthData.Timestamp) && long.TryParse(depthData.Timestamp, out var ts))
-            {
-                lastUpdate = DateTimeOffset.FromUnixTimeMilliseconds(ts).UtcDateTime;
+                var asks = depthData.Asks.Select(a =>
+                {
+                    decimal.TryParse(a[0], out var p);
+                    decimal.TryParse(a[1], out var s);
+                    return new OrderLevel { Price = p, Size = s };
+                }).ToList();
+
+                var bids = depthData.Bids.Select(b =>
+                {
+                    decimal.TryParse(b[0], out var p);
+                    decimal.TryParse(b[1], out var s);
+                    return new OrderLevel { Price = p, Size = s };
+                }).ToList();
+
+                _orderBooks[symbol] = new OrderBookData
+                {
+                    Symbol = symbol,
+                    Asks = asks,
+                    Bids = bids,
+                    LastUpdate = !string.IsNullOrEmpty(depthData.Timestamp) && long.TryParse(depthData.Timestamp, out var ts)
+                        ? DateTimeOffset.FromUnixTimeMilliseconds(ts).UtcDateTime
+                        : DateTime.UtcNow
+                };
+
+                OnOrderBookUpdated?.Invoke();
             }
-            else
+            catch (Exception ex)
             {
-                _logger?.LogWarning("Failed to parse order book timestamp for {Symbol}, using current time", symbol);
-                lastUpdate = DateTime.UtcNow;
+                System.Diagnostics.Debug.WriteLine($"[OrderBook ERROR] {ex.Message}");
             }
-            
-            _orderBooks[symbol] = new OrderBookData
-            {
-                Symbol = symbol,
-                Asks = asks,
-                Bids = bids,
-                LastUpdate = lastUpdate
-            };
-            
-            OnOrderBookUpdated?.Invoke();
         });
     }
     

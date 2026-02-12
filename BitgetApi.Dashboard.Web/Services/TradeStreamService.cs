@@ -36,36 +36,37 @@ public class TradeStreamService
         
         if (!_trades.ContainsKey(symbol))
             _trades[symbol] = new Queue<TradeData>();
-        
+
         await _spotChannels!.SubscribeTradesAsync(symbol, trade =>
         {
-            DateTime timestamp;
-            if (!string.IsNullOrEmpty(trade.Timestamp) && long.TryParse(trade.Timestamp, out var ts))
+            try
             {
-                timestamp = DateTimeOffset.FromUnixTimeMilliseconds(ts).UtcDateTime;
+                if (!decimal.TryParse(trade.Price, out var price) || !decimal.TryParse(trade.Size, out var size))
+                    return;
+
+                var tradeData = new TradeData
+                {
+                    Symbol = symbol,
+                    Price = price,
+                    Size = size,
+                    Side = trade.Side,
+                    Timestamp = !string.IsNullOrEmpty(trade.Timestamp) && long.TryParse(trade.Timestamp, out var ts)
+                        ? DateTimeOffset.FromUnixTimeMilliseconds(ts).UtcDateTime
+                        : DateTime.UtcNow
+                };
+
+                var queue = _trades[symbol];
+                queue.Enqueue(tradeData);
+
+                while (queue.Count > MaxTradesPerSymbol)
+                    queue.Dequeue();
+
+                OnTradeReceived?.Invoke();
             }
-            else
+            catch (Exception ex)
             {
-                _logger?.LogWarning("Failed to parse trade timestamp for {Symbol}, using current time", symbol);
-                timestamp = DateTime.UtcNow;
+                System.Diagnostics.Debug.WriteLine($"[TradeStream ERROR] {ex.Message}");
             }
-            
-            var tradeData = new TradeData
-            {
-                Symbol = symbol,
-                Price = decimal.Parse(trade.Price),
-                Size = decimal.Parse(trade.Size),
-                Side = trade.Side,
-                Timestamp = timestamp
-            };
-            
-            var queue = _trades[symbol];
-            queue.Enqueue(tradeData);
-            
-            while (queue.Count > MaxTradesPerSymbol)
-                queue.Dequeue();
-            
-            OnTradeReceived?.Invoke();
         });
     }
     
