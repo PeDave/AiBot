@@ -62,6 +62,33 @@ public class BitgetAccountService
         return await response.Content.ReadFromJsonAsync<EarnAccountResponse>();
     }
 
+    public async Task<FuturesBotAccountResponse?> GetFuturesBotAccountAsync()
+    {
+        try
+        {
+            var endpoint = "/api/v2/copy/mix-trader/account-assets?productType=USDT-FUTURES";
+            var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
+            
+            var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
+            AddAuthHeaders(request, "GET", endpoint, "", timestamp);
+            
+            var response = await _httpClient.SendAsync(request);
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"⚠️ Futures bot account not accessible (status: {response.StatusCode})");
+                return null;
+            }
+            
+            return await response.Content.ReadFromJsonAsync<FuturesBotAccountResponse>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"⚠️ Error fetching futures bot account: {ex.Message}");
+            return null;
+        }
+    }
+
     private void AddAuthHeaders(HttpRequestMessage request, string method, string endpoint, string body, string timestamp)
     {
         var sign = GenerateSignature(timestamp, method, endpoint, body);
@@ -158,4 +185,28 @@ public class EarnAsset
     
     [JsonPropertyName("usdtValue")]
     public string UsdtValue { get; set; } = "";
+}
+
+public class FuturesBotAccountResponse
+{
+    [JsonPropertyName("code")]
+    public string Code { get; set; } = "";
+    
+    [JsonPropertyName("data")]
+    public List<FuturesBotAsset> Data { get; set; } = new();
+}
+
+public class FuturesBotAsset
+{
+    [JsonPropertyName("coin")]
+    public string Coin { get; set; } = "";
+    
+    [JsonPropertyName("available")]
+    public string Available { get; set; } = "";
+    
+    [JsonPropertyName("frozen")]
+    public string Frozen { get; set; } = "";
+    
+    [JsonPropertyName("equity")]
+    public string Equity { get; set; } = "";
 }
