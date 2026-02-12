@@ -9,10 +9,11 @@
                @bind="searchTerm" 
                @bind:event="oninput" />
         
-        <select @bind="filterAccount">
+        <select @bind="filterAccount" class="account-filter">
             <option value="All">All Accounts</option>
             <option value="Spot">Spot</option>
             <option value="Futures">Futures</option>
+            <option value="Futures Bot">Futures Bot</option>
             <option value="Earn">Earn</option>
         </select>
     </div>
@@ -32,7 +33,7 @@
             {
                 <tr>
                     <td class="coin">@asset.Coin</td>
-                    <td class="account">@asset.Account</td>
+                    <td class="@GetAccountCssClass(asset.Account)">@asset.Account</td>
                     <td>@asset.Available.ToString("N8")</td>
                     <td>@asset.Frozen.ToString("N8")</td>
                     <td class="usd-value">$@asset.UsdtValue.ToString("N2")</td>
@@ -66,5 +67,10 @@
             
             return filtered.OrderByDescending(a => a.UsdtValue);
         }
+    }
+    
+    private string GetAccountCssClass(string account)
+    {
+        return $"account account-{account.ToLower().Replace(" ", "-")}";
     }
 }
