@@ -70,7 +70,6 @@ public class BitgetAccountService
         request.Headers.Add("ACCESS-SIGN", sign);
         request.Headers.Add("ACCESS-TIMESTAMP", timestamp);
         request.Headers.Add("ACCESS-PASSPHRASE", _config.Passphrase);
-        request.Headers.Add("Content-Type", "application/json");
     }
 
     private string GenerateSignature(string timestamp, string method, string endpoint, string body)

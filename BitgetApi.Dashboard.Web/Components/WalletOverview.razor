@@ -2,36 +2,48 @@
 
 @if (Summary != null)
 {
-    <div class="wallet-overview">
-        <div class="total-balance-card">
-            <h2>TOTAL PORTFOLIO VALUE</h2>
-            <div class="balance">$@Summary.TotalBalance.ToString("N2")</div>
-            <div class="change">+0.00%</div>
-        </div>
-        
-        <div class="balance-distribution">
-            <div class="balance-item">
-                <span class="label">SPOT</span>
-                <span class="value">$@Summary.SpotBalance.ToString("N2")</span>
-                <span class="percent">@GetPercentage(Summary.SpotBalance)%</span>
-            </div>
-            <div class="balance-item">
-                <span class="label">FUTURES</span>
-                <span class="value">$@Summary.FuturesBalance.ToString("N2")</span>
-                <span class="percent">@GetPercentage(Summary.FuturesBalance)%</span>
-            </div>
-            <div class="balance-item">
-                <span class="label">EARN</span>
-                <span class="value">$@Summary.EarnBalance.ToString("N2")</span>
-                <span class="percent">@GetPercentage(Summary.EarnBalance)%</span>
-            </div>
-            <div class="balance-item">
-                <span class="label">BOT</span>
-                <span class="value">$@Summary.BotBalance.ToString("N2")</span>
-                <span class="percent">@GetPercentage(Summary.BotBalance)%</span>
+    @if (Summary.HasError)
+    {
+        <div class="wallet-overview">
+            <div class="total-balance-card error">
+                <h2>ERROR LOADING PORTFOLIO</h2>
+                <div class="error-message">@Summary.ErrorMessage</div>
+                <p style="margin-top: 15px; font-size: 14px;">Please check your API credentials and try again.</p>
             </div>
         </div>
-    </div>
+    }
+    else
+    {
+        <div class="wallet-overview">
+            <div class="total-balance-card">
+                <h2>TOTAL PORTFOLIO VALUE</h2>
+                <div class="balance">$@Summary.TotalBalance.ToString("N2")</div>
+            </div>
+            
+            <div class="balance-distribution">
+                <div class="balance-item">
+                    <span class="label">SPOT</span>
+                    <span class="value">$@Summary.SpotBalance.ToString("N2")</span>
+                    <span class="percent">@GetPercentage(Summary.SpotBalance)%</span>
+                </div>
+                <div class="balance-item">
+                    <span class="label">FUTURES</span>
+                    <span class="value">$@Summary.FuturesBalance.ToString("N2")</span>
+                    <span class="percent">@GetPercentage(Summary.FuturesBalance)%</span>
+                </div>
+                <div class="balance-item">
+                    <span class="label">EARN</span>
+                    <span class="value">$@Summary.EarnBalance.ToString("N2")</span>
+                    <span class="percent">@GetPercentage(Summary.EarnBalance)%</span>
+                </div>
+                <div class="balance-item">
+                    <span class="label">BOT</span>
+                    <span class="value">$@Summary.BotBalance.ToString("N2")</span>
+                    <span class="percent">@GetPercentage(Summary.BotBalance)%</span>
+                </div>
+            </div>
+        </div>
+    }
 }
 else
 {

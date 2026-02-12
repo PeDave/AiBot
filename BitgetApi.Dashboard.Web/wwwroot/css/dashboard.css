@@ -341,6 +341,23 @@ h1 {
     font-weight: bold;
 }
 
+.total-balance-card.error {
+    border-color: var(--negative);
+}
+
+.total-balance-card.error h2 {
+    color: var(--negative);
+}
+
+.total-balance-card .error-message {
+    color: var(--negative);
+    font-size: 16px;
+    margin: 15px 0;
+    padding: 15px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+}
+
 .balance-distribution {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
