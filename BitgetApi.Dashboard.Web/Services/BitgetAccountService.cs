@@ -350,29 +350,46 @@ public class SpotAccountResponse
     public string Message { get; set; } = "";
     
     [JsonPropertyName("data")]
-    public List<SpotAsset>? Data { get; set; }
-    
-    // Alternative: nested list structure
-    [JsonPropertyName("data")]
-    public SpotAccountDataWrapper? DataWrapper { get; set; }
+    public JsonElement? DataElement { get; set; }
     
     // Helper to get assets from either structure
     public List<SpotAsset> GetAssets()
     {
-        if (Data != null && Data.Any())
-            return Data;
+        if (DataElement == null || DataElement.Value.ValueKind == JsonValueKind.Null)
+            return new List<SpotAsset>();
         
-        if (DataWrapper?.List != null && DataWrapper.List.Any())
-            return DataWrapper.List;
+        try
+        {
+            // Try as direct array
+            if (DataElement.Value.ValueKind == JsonValueKind.Array)
+            {
+                var assets = JsonSerializer.Deserialize<List<SpotAsset>>(
+                    DataElement.Value.GetRawText(),
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                );
+                return assets ?? new List<SpotAsset>();
+            }
+            
+            // Try as nested object with "list" property
+            if (DataElement.Value.ValueKind == JsonValueKind.Object)
+            {
+                if (DataElement.Value.TryGetProperty("list", out var listElement))
+                {
+                    var assets = JsonSerializer.Deserialize<List<SpotAsset>>(
+                        listElement.GetRawText(),
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                    );
+                    return assets ?? new List<SpotAsset>();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"⚠️ Error parsing spot assets: {ex.Message}");
+        }
         
         return new List<SpotAsset>();
     }
-}
-
-public class SpotAccountDataWrapper
-{
-    [JsonPropertyName("list")]
-    public List<SpotAsset> List { get; set; } = new();
 }
 
 public class SpotAsset
@@ -399,29 +416,46 @@ public class FuturesAccountResponse
     public string Code { get; set; } = "";
     
     [JsonPropertyName("data")]
-    public List<FuturesAccount>? Data { get; set; }
-    
-    // Alternative: nested list structure
-    [JsonPropertyName("data")]
-    public FuturesAccountDataWrapper? DataWrapper { get; set; }
+    public JsonElement? DataElement { get; set; }
     
     // Helper to get accounts from either structure
     public List<FuturesAccount> GetAccounts()
     {
-        if (Data != null && Data.Any())
-            return Data;
+        if (DataElement == null || DataElement.Value.ValueKind == JsonValueKind.Null)
+            return new List<FuturesAccount>();
         
-        if (DataWrapper?.List != null && DataWrapper.List.Any())
-            return DataWrapper.List;
+        try
+        {
+            // Try as direct array
+            if (DataElement.Value.ValueKind == JsonValueKind.Array)
+            {
+                var accounts = JsonSerializer.Deserialize<List<FuturesAccount>>(
+                    DataElement.Value.GetRawText(),
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                );
+                return accounts ?? new List<FuturesAccount>();
+            }
+            
+            // Try as nested object with "list" property
+            if (DataElement.Value.ValueKind == JsonValueKind.Object)
+            {
+                if (DataElement.Value.TryGetProperty("list", out var listElement))
+                {
+                    var accounts = JsonSerializer.Deserialize<List<FuturesAccount>>(
+                        listElement.GetRawText(),
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                    );
+                    return accounts ?? new List<FuturesAccount>();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"⚠️ Error parsing futures accounts: {ex.Message}");
+        }
         
         return new List<FuturesAccount>();
     }
-}
-
-public class FuturesAccountDataWrapper
-{
-    [JsonPropertyName("list")]
-    public List<FuturesAccount> List { get; set; } = new();
 }
 
 public class FuturesAccount
@@ -451,29 +485,46 @@ public class EarnAccountResponse
     public string Code { get; set; } = "";
     
     [JsonPropertyName("data")]
-    public List<EarnAsset>? Data { get; set; }
-    
-    // Alternative: nested list structure
-    [JsonPropertyName("data")]
-    public EarnAccountDataWrapper? DataWrapper { get; set; }
+    public JsonElement? DataElement { get; set; }
     
     // Helper to get assets from either structure
     public List<EarnAsset> GetAssets()
     {
-        if (Data != null && Data.Any())
-            return Data;
+        if (DataElement == null || DataElement.Value.ValueKind == JsonValueKind.Null)
+            return new List<EarnAsset>();
         
-        if (DataWrapper?.List != null && DataWrapper.List.Any())
-            return DataWrapper.List;
+        try
+        {
+            // Try as direct array
+            if (DataElement.Value.ValueKind == JsonValueKind.Array)
+            {
+                var assets = JsonSerializer.Deserialize<List<EarnAsset>>(
+                    DataElement.Value.GetRawText(),
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                );
+                return assets ?? new List<EarnAsset>();
+            }
+            
+            // Try as nested object with "list" property
+            if (DataElement.Value.ValueKind == JsonValueKind.Object)
+            {
+                if (DataElement.Value.TryGetProperty("list", out var listElement))
+                {
+                    var assets = JsonSerializer.Deserialize<List<EarnAsset>>(
+                        listElement.GetRawText(),
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                    );
+                    return assets ?? new List<EarnAsset>();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"⚠️ Error parsing earn assets: {ex.Message}");
+        }
         
         return new List<EarnAsset>();
     }
-}
-
-public class EarnAccountDataWrapper
-{
-    [JsonPropertyName("list")]
-    public List<EarnAsset> List { get; set; } = new();
 }
 
 public class EarnAsset
@@ -494,29 +545,46 @@ public class FuturesBotAccountResponse
     public string Code { get; set; } = "";
     
     [JsonPropertyName("data")]
-    public List<FuturesBotAsset>? Data { get; set; }
-    
-    // Alternative: nested list structure
-    [JsonPropertyName("data")]
-    public FuturesBotAccountDataWrapper? DataWrapper { get; set; }
+    public JsonElement? DataElement { get; set; }
     
     // Helper to get assets from either structure
     public List<FuturesBotAsset> GetAssets()
     {
-        if (Data != null && Data.Any())
-            return Data;
+        if (DataElement == null || DataElement.Value.ValueKind == JsonValueKind.Null)
+            return new List<FuturesBotAsset>();
         
-        if (DataWrapper?.List != null && DataWrapper.List.Any())
-            return DataWrapper.List;
+        try
+        {
+            // Try as direct array
+            if (DataElement.Value.ValueKind == JsonValueKind.Array)
+            {
+                var assets = JsonSerializer.Deserialize<List<FuturesBotAsset>>(
+                    DataElement.Value.GetRawText(),
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                );
+                return assets ?? new List<FuturesBotAsset>();
+            }
+            
+            // Try as nested object with "list" property
+            if (DataElement.Value.ValueKind == JsonValueKind.Object)
+            {
+                if (DataElement.Value.TryGetProperty("list", out var listElement))
+                {
+                    var assets = JsonSerializer.Deserialize<List<FuturesBotAsset>>(
+                        listElement.GetRawText(),
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                    );
+                    return assets ?? new List<FuturesBotAsset>();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"⚠️ Error parsing futures bot assets: {ex.Message}");
+        }
         
         return new List<FuturesBotAsset>();
     }
-}
-
-public class FuturesBotAccountDataWrapper
-{
-    [JsonPropertyName("list")]
-    public List<FuturesBotAsset> List { get; set; } = new();
 }
 
 public class FuturesBotAsset
