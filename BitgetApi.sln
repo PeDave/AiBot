@@ -15,6 +15,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BitgetApi.Dashboard", "Bitg
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BitgetApi.Dashboard.Web", "BitgetApi.Dashboard.Web\BitgetApi.Dashboard.Web.csproj", "{B97B3F0B-6D83-477A-ADF7-391F4FCB922C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BitgetApi.TradingEngine", "BitgetApi.TradingEngine\BitgetApi.TradingEngine.csproj", "{DD9D838A-4853-4C19-87AB-7AB5B2EEAD6F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -97,6 +99,18 @@ Global
 		{B97B3F0B-6D83-477A-ADF7-391F4FCB922C}.Release|x64.Build.0 = Release|Any CPU
 		{B97B3F0B-6D83-477A-ADF7-391F4FCB922C}.Release|x86.ActiveCfg = Release|Any CPU
 		{B97B3F0B-6D83-477A-ADF7-391F4FCB922C}.Release|x86.Build.0 = Release|Any CPU
+		{DD9D838A-4853-4C19-87AB-7AB5B2EEAD6F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DD9D838A-4853-4C19-87AB-7AB5B2EEAD6F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DD9D838A-4853-4C19-87AB-7AB5B2EEAD6F}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{DD9D838A-4853-4C19-87AB-7AB5B2EEAD6F}.Debug|x64.Build.0 = Debug|Any CPU
+		{DD9D838A-4853-4C19-87AB-7AB5B2EEAD6F}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{DD9D838A-4853-4C19-87AB-7AB5B2EEAD6F}.Debug|x86.Build.0 = Debug|Any CPU
+		{DD9D838A-4853-4C19-87AB-7AB5B2EEAD6F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DD9D838A-4853-4C19-87AB-7AB5B2EEAD6F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DD9D838A-4853-4C19-87AB-7AB5B2EEAD6F}.Release|x64.ActiveCfg = Release|Any CPU
+		{DD9D838A-4853-4C19-87AB-7AB5B2EEAD6F}.Release|x64.Build.0 = Release|Any CPU
+		{DD9D838A-4853-4C19-87AB-7AB5B2EEAD6F}.Release|x86.ActiveCfg = Release|Any CPU
+		{DD9D838A-4853-4C19-87AB-7AB5B2EEAD6F}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
