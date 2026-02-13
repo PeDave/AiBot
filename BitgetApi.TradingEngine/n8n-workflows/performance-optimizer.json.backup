@@ -1,0 +1,195 @@
+{
+  "name": "Performance Optimizer",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "performance",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Webhook: Receive Performance",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "performance"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Analyze each strategy's performance\nconst data = $json;\nconst strategies = data.strategies;\nconst analysis = [];\n\nfor (const strategy of strategies) {\n  const issues = [];\n  const suggestions = [];\n  \n  // Win rate analysis\n  if (strategy.winRate < 50) {\n    issues.push(`Low win rate: ${strategy.winRate}%`);\n    \n    // Suggest parameter adjustments based on strategy type\n    if (strategy.name === 'RSI_Volume_EMA') {\n      if (strategy.parameters.rsi_oversold < 35) {\n        suggestions.push({\n          parameter: 'rsi_oversold',\n          currentValue: strategy.parameters.rsi_oversold,\n          suggestedValue: strategy.parameters.rsi_oversold + 5,\n          reason: 'Win rate drops with extreme RSI levels. Suggest more conservative threshold.'\n        });\n      }\n    }\n    \n    if (strategy.name === 'Swing') {\n      suggestions.push({\n        parameter: 'swing_lookback',\n        currentValue: strategy.parameters.swing_lookback,\n        suggestedValue: Math.min(strategy.parameters.swing_lookback + 5, 30),\n        reason: 'Increase lookback period for more reliable swing points.'\n      });\n    }\n  }\n  \n  // ROI analysis\n  if (strategy.roi < 0) {\n    issues.push(`Negative ROI: ${strategy.roi}%`);\n    \n    // Suggest tighter stop losses\n    if (strategy.name === 'RSI_Volume_EMA' || strategy.name === 'FVG_Liquidity') {\n      suggestions.push({\n        parameter: 'sl_percent',\n        currentValue: strategy.parameters.sl_percent,\n        suggestedValue: strategy.parameters.sl_percent * 0.8,\n        reason: 'Reduce stop loss to limit downside risk.'\n      });\n    }\n  }\n  \n  // Drawdown analysis\n  if (strategy.drawdown < -15) {\n    issues.push(`High drawdown: ${strategy.drawdown}%`);\n    \n    suggestions.push({\n      parameter: 'volume_multiplier',\n      currentValue: strategy.parameters.volume_multiplier || 1.5,\n      suggestedValue: (strategy.parameters.volume_multiplier || 1.5) + 0.2,\n      reason: 'Increase volume confirmation threshold to avoid false signals.'\n    });\n  }\n  \n  // Good performance - minor optimizations\n  if (strategy.winRate > 60 && strategy.roi > 10) {\n    if (strategy.name === 'RSI_Volume_EMA') {\n      suggestions.push({\n        parameter: 'tp_percent',\n        currentValue: strategy.parameters.tp_percent,\n        suggestedValue: strategy.parameters.tp_percent + 0.5,\n        reason: 'Strategy performing well. Can increase take profit target slightly.'\n      });\n    }\n  }\n  \n  analysis.push({\n    strategy: strategy.name,\n    issues: issues,\n    suggestions: suggestions,\n    totalTrades: strategy.totalTrades\n  });\n}\n\nreturn [{\n  json: {\n    analysis: analysis,\n    overallPerformance: data.overallPerformance\n  }\n}];"
+      },
+      "name": "Analyze Metrics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4",
+        "messages": {
+          "values": [
+            {
+              "message": "={{ \"role\": \"system\", \"content\": \"You are a trading strategy optimizer. Review the performance analysis and suggest parameter optimizations. Return a JSON array of optimizations with: {strategy, parameter, currentValue, suggestedValue, reason, confidence (0-1)}\" }}",
+              "values": [
+                {
+                  "message": "={{ \"role\": \"user\", \"content\": \"Analyze and optimize these strategies: \" + JSON.stringify($json.analysis) + \"\\n\\nOverall Performance: \" + JSON.stringify($json.overallPerformance) }}"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "response_format": "json_object"
+        }
+      },
+      "name": "Generate Optimizations",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse OpenAI response and combine with code-based suggestions\nconst codeAnalysis = $('Analyze Metrics').first().json.analysis;\nconst aiResponse = JSON.parse($('Generate Optimizations').first().json.output);\n\nconst allOptimizations = [];\n\n// Add code-based suggestions\nfor (const stratAnalysis of codeAnalysis) {\n  for (const suggestion of stratAnalysis.suggestions) {\n    allOptimizations.push({\n      strategy: stratAnalysis.strategy,\n      parameter: suggestion.parameter,\n      currentValue: suggestion.currentValue,\n      suggestedValue: suggestion.suggestedValue,\n      reason: suggestion.reason,\n      confidence: 0.75 // Code-based suggestions get 75% confidence\n    });\n  }\n}\n\n// Add AI suggestions if they exist\nif (aiResponse.optimizations && Array.isArray(aiResponse.optimizations)) {\n  for (const opt of aiResponse.optimizations) {\n    // Avoid duplicates\n    const exists = allOptimizations.some(o => \n      o.strategy === opt.strategy && o.parameter === opt.parameter\n    );\n    \n    if (!exists && opt.confidence > 0.7) {\n      allOptimizations.push(opt);\n    }\n  }\n}\n\nreturn [{\n  json: {\n    optimizations: allOptimizations\n  }\n}];"
+      },
+      "name": "Combine Suggestions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.optimizations.length }}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "name": "Filter: Has Optimizations",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5000/api/n8n/optimize",
+        "options": {},
+        "bodyParametersJson": "={{ JSON.stringify($json) }}"
+      },
+      "name": "Send to Trading Engine",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1250, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    optimizations: [],\n    message: 'No optimizations needed at this time'\n  }\n}];"
+      },
+      "name": "No Optimizations",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, message: 'Performance analysis completed' }) }}"
+      },
+      "name": "Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1450, 300]
+    }
+  ],
+  "connections": {
+    "Webhook: Receive Performance": {
+      "main": [
+        [
+          {
+            "node": "Analyze Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Metrics": {
+      "main": [
+        [
+          {
+            "node": "Generate Optimizations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Optimizations": {
+      "main": [
+        [
+          {
+            "node": "Combine Suggestions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine Suggestions": {
+      "main": [
+        [
+          {
+            "node": "Filter: Has Optimizations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter: Has Optimizations": {
+      "main": [
+        [
+          {
+            "node": "Send to Trading Engine",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Optimizations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Trading Engine": {
+      "main": [
+        [
+          {
+            "node": "Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Optimizations": {
+      "main": [
+        [
+          {
+            "node": "Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {},
+  "staticData": null
+}

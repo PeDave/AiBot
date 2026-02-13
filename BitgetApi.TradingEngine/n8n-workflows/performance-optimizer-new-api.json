@@ -1,0 +1,69 @@
+{
+  "name": "Performance Optimizer (New API)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "name": "Schedule Every 6 hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "id": "schedule-trigger"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://localhost:5000/api/performance",
+        "options": {}
+      },
+      "name": "Get Performance Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [450, 300],
+      "id": "get-performance"
+    },
+    {
+      "parameters": {
+        "functionCode": "const strategies = $json.strategies;\nconst optimizations = [];\n\n// Analyze each strategy\nfor (const strat of strategies) {\n  const winRate = strat.winRate || 0;\n  const roi = strat.roi || 0;\n  const params = strat.parameters || {};\n  \n  // Low win rate - adjust RSI threshold\n  if (winRate < 60 && params.rsi_oversold !== undefined) {\n    optimizations.push({\n      strategy: strat.name,\n      parameter: 'rsi_oversold',\n      currentValue: params.rsi_oversold,\n      suggestedValue: params.rsi_oversold + 5,\n      reason: `Win rate too low (${winRate}%). Increase RSI threshold for more conservative entries.`,\n      confidence: 0.8\n    });\n  }\n  \n  // Negative ROI - increase take profit\n  if (roi < 0 && params.tp_percent !== undefined) {\n    optimizations.push({\n      strategy: strat.name,\n      parameter: 'tp_percent',\n      currentValue: params.tp_percent,\n      suggestedValue: params.tp_percent + 0.5,\n      reason: `Negative ROI. Increase take profit target to capture more gains.`,\n      confidence: 0.85\n    });\n  }\n  \n  // High drawdown - reduce position risk\n  if (strat.drawdown < -15 && params.sl_percent !== undefined) {\n    optimizations.push({\n      strategy: strat.name,\n      parameter: 'sl_percent',\n      currentValue: params.sl_percent,\n      suggestedValue: params.sl_percent * 0.9,\n      reason: `High drawdown (${strat.drawdown}%). Tighten stop loss to reduce risk.`,\n      confidence: 0.75\n    });\n  }\n  \n  // Good performance - optimize for more profit\n  if (winRate > 65 && roi > 10 && params.tp_percent !== undefined) {\n    optimizations.push({\n      strategy: strat.name,\n      parameter: 'tp_percent',\n      currentValue: params.tp_percent,\n      suggestedValue: params.tp_percent + 0.3,\n      reason: `Strong performance. Can increase TP slightly to capture extended moves.`,\n      confidence: 0.7\n    });\n  }\n}\n\n// Filter for high confidence only\nconst filtered = optimizations.filter(o => o.confidence > 0.7);\n\nreturn [{ \n  json: { \n    optimizations: filtered,\n    totalAnalyzed: strategies.length,\n    totalSuggestions: filtered.length\n  } \n}];"
+      },
+      "name": "Analyze & Optimize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300],
+      "id": "analyze-optimize"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5000/api/n8n/optimize",
+        "jsonParameters": true,
+        "bodyParametersJson": "={{ $json }}"
+      },
+      "name": "Send Optimizations",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [850, 300],
+      "id": "send-optimizations"
+    }
+  ],
+  "connections": {
+    "Schedule Every 6 hours": { 
+      "main": [[{ "node": "Get Performance Data", "type": "main", "index": 0 }]] 
+    },
+    "Get Performance Data": { 
+      "main": [[{ "node": "Analyze & Optimize", "type": "main", "index": 0 }]] 
+    },
+    "Analyze & Optimize": { 
+      "main": [[{ "node": "Send Optimizations", "type": "main", "index": 0 }]] 
+    }
+  },
+  "settings": {}
+}

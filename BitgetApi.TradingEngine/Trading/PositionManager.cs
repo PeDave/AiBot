@@ -179,6 +179,11 @@ public class PositionManager
         return _openPositions.Values.Count(p => p.Symbol == symbol);
     }
 
+    public Task<int> GetOpenPositionsCountAsync()
+    {
+        return Task.FromResult(_openPositions.Count);
+    }
+
     private string GetPositionKey(string symbol, string strategy)
     {
         return $"{symbol}_{strategy}";

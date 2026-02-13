@@ -52,7 +52,7 @@ public class StrategyOrchestrator
 
             foreach (var symbol in symbols)
             {
-                await AnalyzeSymbolAsync(symbol);
+                await AnalyzeSymbolWithN8NAsync(symbol);
                 await Task.Delay(1000); // Rate limiting
             }
         }
@@ -62,30 +62,25 @@ public class StrategyOrchestrator
         }
     }
 
-    private async Task AnalyzeSymbolAsync(string symbol)
+    /// <summary>
+    /// Analyze a symbol with all enabled strategies and return signals
+    /// </summary>
+    public async Task<List<Signal>> AnalyzeSymbolAsync(string symbol)
     {
+        var signals = new List<Signal>();
+        
         try
         {
-            // Check if already at max positions for this symbol
-            var maxPerSymbol = _configuration.GetValue<int>("Trading:MaxPositionsPerSymbol", 1);
-            if (_positionManager.GetOpenPositionCountForSymbol(symbol) >= maxPerSymbol)
-            {
-                _logger.LogDebug("Skipping {Symbol}: max positions reached", symbol);
-                return;
-            }
-
             // Fetch candle data
             var candles = await FetchCandleDataAsync(symbol);
             
             if (candles.Count < 250)
             {
                 _logger.LogWarning("Insufficient candle data for {Symbol}", symbol);
-                return;
+                return signals;
             }
 
             // Generate signals from all enabled strategies
-            var signals = new List<Signal>();
-            
             foreach (var strategy in _strategies.Where(s => s.IsEnabled))
             {
                 var signal = await strategy.GenerateSignalAsync(symbol, candles);
@@ -98,9 +93,38 @@ public class StrategyOrchestrator
                 }
             }
 
+            if (!signals.Any())
+            {
+                _logger.LogDebug("No signals generated for {Symbol}", symbol);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error analyzing {Symbol}", symbol);
+        }
+        
+        return signals;
+    }
+
+    private async Task AnalyzeSymbolWithN8NAsync(string symbol)
+    {
+        try
+        {
+            // Check if already at max positions for this symbol
+            var maxPerSymbol = _configuration.GetValue<int>("Trading:MaxPositionsPerSymbol", 1);
+            if (_positionManager.GetOpenPositionCountForSymbol(symbol) >= maxPerSymbol)
+            {
+                _logger.LogDebug("Skipping {Symbol}: max positions reached", symbol);
+                return;
+            }
+
+            // Get signals
+            var signals = await AnalyzeSymbolAsync(symbol);
+
             // If we have signals, send to N8N for decision
             if (signals.Count > 0)
             {
+                var candles = await FetchCandleDataAsync(symbol);
                 var currentPrice = candles.Last().Close;
                 var volume24h = candles.TakeLast(24).Sum(c => c.Volume);
 
@@ -118,7 +142,7 @@ public class StrategyOrchestrator
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing {Symbol}", symbol);
+            _logger.LogError(ex, "Error analyzing {Symbol} with N8N", symbol);
         }
     }
 
