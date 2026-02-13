@@ -55,13 +55,13 @@ public class StrategyOrchestrator
         // ✅ ADD VERIFICATION
         if (_strategies.Count == 0)
         {
-            _logger.LogWarning("⚠️ WARNING: No strategies configured for the orchestrator!");
+            _logger.LogWarning("⚠️ No strategies configured for the orchestrator!");
         }
         
         var enabledCount = _strategies.Count(s => s.IsEnabled);
         if (enabledCount == 0)
         {
-            _logger.LogWarning("⚠️ WARNING: All registered strategies are currently disabled!");
+            _logger.LogWarning("⚠️ All registered strategies are currently disabled!");
         }
     }
 
@@ -139,7 +139,7 @@ public class StrategyOrchestrator
 
             if (enabledStrategies.Count == 0)
             {
-                _logger.LogWarning("⚠️ WARNING: No enabled strategies found after filtering!");
+                _logger.LogWarning("⚠️ No enabled strategies found after filtering!");
                 return signals;
             }
 
