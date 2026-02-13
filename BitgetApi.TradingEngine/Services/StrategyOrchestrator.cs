@@ -51,6 +51,18 @@ public class StrategyOrchestrator
         {
             Console.WriteLine($"   - {strat.Name}: IsEnabled={strat.IsEnabled}");
         }
+        
+        // ✅ ADD VERIFICATION
+        if (_strategies.Count == 0)
+        {
+            _logger.LogWarning("⚠️ No strategies configured for the orchestrator!");
+        }
+        
+        var enabledCount = _strategies.Count(s => s.IsEnabled);
+        if (enabledCount == 0)
+        {
+            _logger.LogWarning("⚠️ All registered strategies are currently disabled!");
+        }
     }
 
     public async Task RunAnalysisAsync()
@@ -110,13 +122,32 @@ public class StrategyOrchestrator
 
             _logger.LogInformation("✅ Fetched {Count} candles for {Symbol}", candles.Count, symbol);
 
-            // ✅ ADD THIS BEFORE STRATEGY LOOP!
-            Console.WriteLine($"🔍 DEBUG: Total strategies: {_strategies.Count}");
-            Console.WriteLine($"🔍 DEBUG: Enabled strategies: {_strategies.Count(s => s.IsEnabled)}");
-
-            // Run strategies
-            foreach (var strategy in _strategies.Where(s => s.IsEnabled))
+            // ✅ ENHANCED DEBUG LOGGING
+            _logger.LogDebug("🔍 DEBUG: Total strategies: {Count}", _strategies.Count);
+            _logger.LogDebug("🔍 DEBUG: Enabled strategies: {Count}", _strategies.Count(s => s.IsEnabled));
+            
+            // ✅ ADD DETAILED STRATEGY INSPECTION
+            _logger.LogDebug("🔍 DEBUG: Detailed strategy list:");
+            foreach (var s in _strategies)
             {
+                _logger.LogDebug("   - Name={Name}, IsEnabled={IsEnabled}, Type={Type}", s.Name, s.IsEnabled, s.GetType().FullName);
+            }
+
+            // ✅ CREATE FILTERED LIST EXPLICITLY (fixes the issue where LINQ query wasn't being executed)
+            var enabledStrategies = _strategies.Where(s => s.IsEnabled).ToList();
+            _logger.LogDebug("🔍 DEBUG: After .Where() filter: {Count} strategies", enabledStrategies.Count);
+
+            if (enabledStrategies.Count == 0)
+            {
+                _logger.LogWarning("⚠️ No enabled strategies found after filtering!");
+                return signals;
+            }
+
+            // ✅ USE EXPLICIT LIST IN LOOP
+            foreach (var strategy in enabledStrategies)
+            {
+                _logger.LogInformation("🚀 Running strategy: {Strategy}", strategy.Name);
+                
                 try
                 {
                     var signal = await strategy.GenerateSignalAsync(symbol, candles);
