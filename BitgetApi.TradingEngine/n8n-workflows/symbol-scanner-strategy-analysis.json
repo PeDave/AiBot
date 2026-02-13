@@ -1,0 +1,112 @@
+{
+  "name": "Symbol Scanner + Strategy Analysis",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "name": "Schedule Every 15 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "id": "schedule-trigger"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://localhost:5000/api/symbols/scan?count=10",
+        "options": {}
+      },
+      "name": "Get Top Symbols",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [450, 300],
+      "id": "get-symbols"
+    },
+    {
+      "parameters": {
+        "functionCode": "const symbols = $json.symbols.slice(0, 6).map(s => s.symbol);\nconst final = ['BTCUSDT', 'ETHUSDT', ...symbols.filter(s => s !== 'BTCUSDT' && s !== 'ETHUSDT')];\nreturn [{ json: { symbols: Array.from(new Set(final)) } }];"
+      },
+      "name": "Filter Top 6",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300],
+      "id": "filter-symbols"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5000/api/strategies/analyze",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={{ $json }}"
+      },
+      "name": "Analyze Strategies",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [850, 300],
+      "id": "analyze-strategies"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Loop over each analysis\nconst analyses = $json.analyses;\nconst results = [];\n\nfor (const analysis of analyses) {\n  // Mock sentiment calculation (in production, use real sentiment API)\n  const sentiment = Math.random() * 40 + 50;\n  results.push({\n    json: {\n      symbol: analysis.symbol,\n      signals: analysis.signals,\n      sentiment: sentiment\n    }\n  });\n}\n\nreturn results;"
+      },
+      "name": "Add Mock Sentiment",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 300],
+      "id": "add-sentiment"
+    },
+    {
+      "parameters": {
+        "functionCode": "const signals = $json.signals;\nconst sentiment = $json.sentiment;\nconst symbol = $json.symbol;\n\nif (!signals || signals.length === 0) {\n  return [{ json: { decision: 'NO_ACTION', symbol: symbol } }];\n}\n\n// Score each signal based on confidence and sentiment alignment\nconst scored = signals.map(s => {\n  let score = s.confidence;\n  \n  // Boost score if sentiment aligns with signal direction\n  if ((s.type === 'Long' && sentiment > 60) || (s.type === 'Short' && sentiment < 40)) {\n    score += 10;\n  }\n  \n  // Reduce score if sentiment contradicts signal\n  if ((s.type === 'Long' && sentiment < 40) || (s.type === 'Short' && sentiment > 60)) {\n    score -= 15;\n  }\n  \n  return { \n    strategy: s.strategy, \n    score: Math.max(0, Math.min(100, score)), \n    signal: s \n  };\n});\n\n// Filter for high-confidence signals\nconst valid = scored.filter(s => s.score > 70);\n\nif (valid.length === 0) {\n  return [{ json: { decision: 'NO_ACTION', symbol: symbol, reason: 'Low confidence' } }];\n}\n\n// Calculate weighted average entry/exit points\nconst totalWeight = valid.reduce((sum, s) => sum + s.score, 0);\nconst avgEntry = valid.reduce((sum, s) => sum + (s.signal.entryPrice * s.score), 0) / totalWeight;\nconst avgSL = valid.reduce((sum, s) => sum + (s.signal.stopLoss * s.score), 0) / totalWeight;\nconst avgTP = valid.reduce((sum, s) => sum + (s.signal.takeProfit * s.score), 0) / totalWeight;\nconst avgConfidence = totalWeight / valid.length;\n\n// Calculate position size (base $100, scaled by confidence)\nconst positionSize = 100 * (avgConfidence / 70);\n\n// Calculate leverage (1-10x based on confidence)\nconst leverage = Math.min(10, Math.max(1, Math.round(avgConfidence / 15)));\n\n// Determine direction\nconst direction = valid[0].signal.type === 'Long' ? 'LONG' : 'SHORT';\n\nreturn [{\n  json: {\n    symbol: symbol,\n    decision: 'EXECUTE',\n    trade: {\n      direction: direction,\n      entryPrice: avgEntry,\n      stopLoss: avgSL,\n      takeProfit: avgTP,\n      positionSizeUsd: positionSize,\n      leverage: leverage,\n      confidence: avgConfidence\n    },\n    strategyScores: Object.fromEntries(valid.map(s => [s.strategy, s.score])),\n    reasoning: `${valid.length}/${signals.length} strategies agree on ${direction}. Sentiment: ${sentiment.toFixed(1)}%. Confidence: ${avgConfidence.toFixed(1)}%`\n  }\n}];"
+      },
+      "name": "Calculate Decision",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 300],
+      "id": "calculate-decision"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5000/api/n8n/decision",
+        "jsonParameters": true,
+        "bodyParametersJson": "={{ $json }}"
+      },
+      "name": "Send Decision to Trading Engine",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1450, 300],
+      "id": "send-decision"
+    }
+  ],
+  "connections": {
+    "Schedule Every 15 min": { 
+      "main": [[{ "node": "Get Top Symbols", "type": "main", "index": 0 }]] 
+    },
+    "Get Top Symbols": { 
+      "main": [[{ "node": "Filter Top 6", "type": "main", "index": 0 }]] 
+    },
+    "Filter Top 6": { 
+      "main": [[{ "node": "Analyze Strategies", "type": "main", "index": 0 }]] 
+    },
+    "Analyze Strategies": { 
+      "main": [[{ "node": "Add Mock Sentiment", "type": "main", "index": 0 }]] 
+    },
+    "Add Mock Sentiment": { 
+      "main": [[{ "node": "Calculate Decision", "type": "main", "index": 0 }]] 
+    },
+    "Calculate Decision": { 
+      "main": [[{ "node": "Send Decision to Trading Engine", "type": "main", "index": 0 }]] 
+    }
+  },
+  "settings": {}
+}
