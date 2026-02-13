@@ -23,27 +23,43 @@ public class SymbolScanner
         }
         
         // Score each symbol
-        var scored = tickers.Select(t => new SymbolScore
-        {
-            Symbol = t.Symbol,
-            Price = decimal.Parse(t.LastPrice),
-            Volume = t.QuoteVolume,
-            PriceChange = t.ChangeUtc,
-            High24h = decimal.Parse(t.High24h),
-            Low24h = decimal.Parse(t.Low24h),
-            Score = CalculateScore(t)
-        })
-        .OrderByDescending(s => s.Score)
-        .Take(count)
-        .ToList();
+        var scored = new List<SymbolScore>();
         
-        Console.WriteLine($"✅ Top {scored.Count} symbols:");
-        foreach (var item in scored.Take(5))
+        foreach (var t in tickers)
+        {
+            // Safely parse decimal values
+            if (!decimal.TryParse(t.LastPrice, out var price) ||
+                !decimal.TryParse(t.High24h, out var high24h) ||
+                !decimal.TryParse(t.Low24h, out var low24h))
+            {
+                Console.WriteLine($"⚠️ Invalid price data for {t.Symbol}, skipping");
+                continue;
+            }
+            
+            scored.Add(new SymbolScore
+            {
+                Symbol = t.Symbol,
+                Price = price,
+                Volume = t.QuoteVolume,
+                PriceChange = t.ChangeUtc,
+                High24h = high24h,
+                Low24h = low24h,
+                Score = CalculateScore(t)
+            });
+        }
+        
+        var topScored = scored
+            .OrderByDescending(s => s.Score)
+            .Take(count)
+            .ToList();
+        
+        Console.WriteLine($"✅ Top {topScored.Count} symbols:");
+        foreach (var item in topScored.Take(5))
         {
             Console.WriteLine($"   {item.Symbol}: Score={item.Score:F2}, Vol=${item.Volume/1_000_000:F2}M, Change={item.PriceChange:F2}%");
         }
         
-        return scored;
+        return topScored;
     }
     
     private decimal CalculateScore(TickerData ticker)

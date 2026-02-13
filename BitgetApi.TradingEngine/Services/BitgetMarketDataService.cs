@@ -111,16 +111,34 @@ public class BitgetMarketDataService
                 return new List<Candle>();
             }
             
-            var candles = result.Data.Select(c => new Candle
+            var candles = result.Data.Select(c => 
             {
-                Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(long.Parse(c[0])).DateTime,
-                Open = decimal.Parse(c[1], CultureInfo.InvariantCulture),
-                High = decimal.Parse(c[2], CultureInfo.InvariantCulture),
-                Low = decimal.Parse(c[3], CultureInfo.InvariantCulture),
-                Close = decimal.Parse(c[4], CultureInfo.InvariantCulture),
-                Volume = decimal.Parse(c[5], CultureInfo.InvariantCulture),
-                Symbol = symbol
-            }).OrderBy(c => c.Timestamp).ToList();
+                // Safely parse candle data
+                if (!long.TryParse(c[0], out var timestamp) ||
+                    !decimal.TryParse(c[1], CultureInfo.InvariantCulture, out var open) ||
+                    !decimal.TryParse(c[2], CultureInfo.InvariantCulture, out var high) ||
+                    !decimal.TryParse(c[3], CultureInfo.InvariantCulture, out var low) ||
+                    !decimal.TryParse(c[4], CultureInfo.InvariantCulture, out var close) ||
+                    !decimal.TryParse(c[5], CultureInfo.InvariantCulture, out var volume))
+                {
+                    return null;
+                }
+                
+                return new Candle
+                {
+                    Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(timestamp).DateTime,
+                    Open = open,
+                    High = high,
+                    Low = low,
+                    Close = close,
+                    Volume = volume,
+                    Symbol = symbol
+                };
+            })
+            .Where(c => c != null)
+            .Cast<Candle>()
+            .OrderBy(c => c.Timestamp)
+            .ToList();
             
             return candles;
         }
