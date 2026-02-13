@@ -39,7 +39,7 @@ public class BitgetFuturesClient
                 return response.Data.OrderId;
             }
 
-            _logger.LogError("Failed to place futures market order: {Message}", response?.Msg ?? "Unknown error");
+            _logger.LogError("Failed to place futures market order: {Message}", response?.Message ?? "Unknown error");
             return string.Empty;
         }
         catch (Exception ex)
@@ -71,7 +71,7 @@ public class BitgetFuturesClient
                 return response.Data.OrderId;
             }
 
-            _logger.LogError("Failed to place futures limit order: {Message}", response?.Msg ?? "Unknown error");
+            _logger.LogError("Failed to place futures limit order: {Message}", response?.Message ?? "Unknown error");
             return string.Empty;
         }
         catch (Exception ex)
@@ -86,17 +86,14 @@ public class BitgetFuturesClient
         try
         {
             var planSide = side.ToLower() == "buy" ? "sell" : "buy"; // Opposite side for SL
-            var triggerType = side.ToLower() == "buy" ? "mark_price" : "mark_price";
 
             var response = await _client.FuturesTrade.PlacePlanOrderAsync(
                 symbol: symbol,
                 marginCoin: "USDT",
-                planType: "normal_plan",
                 side: planSide,
-                orderType: "market",
-                size: size.ToString("F8"),
                 triggerPrice: stopLossPrice.ToString("F2"),
-                triggerType: triggerType
+                executePrice: stopLossPrice.ToString("F2"), 
+                size: size.ToString("F8")
             );
 
             if (response?.Code == "00000")
@@ -105,7 +102,7 @@ public class BitgetFuturesClient
                 return true;
             }
 
-            _logger.LogError("Failed to set stop loss: {Message}", response?.Msg ?? "Unknown error");
+            _logger.LogError("Failed to set stop loss: {Message}", response?.Message ?? "Unknown error");
             return false;
         }
         catch (Exception ex)
@@ -120,17 +117,14 @@ public class BitgetFuturesClient
         try
         {
             var planSide = side.ToLower() == "buy" ? "sell" : "buy"; // Opposite side for TP
-            var triggerType = side.ToLower() == "buy" ? "mark_price" : "mark_price";
 
             var response = await _client.FuturesTrade.PlacePlanOrderAsync(
                 symbol: symbol,
                 marginCoin: "USDT",
-                planType: "profit_plan",
                 side: planSide,
-                orderType: "market",
-                size: size.ToString("F8"),
                 triggerPrice: takeProfitPrice.ToString("F2"),
-                triggerType: triggerType
+                executePrice: takeProfitPrice.ToString("F2"),
+                size: size.ToString("F8")
             );
 
             if (response?.Code == "00000")
@@ -139,7 +133,7 @@ public class BitgetFuturesClient
                 return true;
             }
 
-            _logger.LogError("Failed to set take profit: {Message}", response?.Msg ?? "Unknown error");
+            _logger.LogError("Failed to set take profit: {Message}", response?.Message ?? "Unknown error");
             return false;
         }
         catch (Exception ex)
@@ -169,7 +163,7 @@ public class BitgetFuturesClient
                 return true;
             }
 
-            _logger.LogError("Failed to close position: {Message}", response?.Msg ?? "Unknown error");
+            _logger.LogError("Failed to close position: {Message}", response?.Message ?? "Unknown error");
             return false;
         }
         catch (Exception ex)

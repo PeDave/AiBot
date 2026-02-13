@@ -256,22 +256,26 @@ public class StrategyOrchestrator
         try
         {
             // Fetch 1-hour candles for the last 300 hours (~12.5 days)
-            var response = await _bitgetClient.SpotMarket.GetCandlesAsync(
+            var endTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var startTime = DateTimeOffset.UtcNow.AddHours(-300).ToUnixTimeMilliseconds();
+            
+            var response = await _bitgetClient.SpotMarket.GetCandlesticksAsync(
                 symbol: symbol,
                 granularity: "1h",
-                limit: 300
+                startTime: startTime,
+                endTime: endTime
             );
 
             if (response?.Code == "00000" && response.Data != null)
             {
                 var candles = response.Data.Select(c => new Candle
                 {
-                    Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(long.Parse(c[0])).DateTime,
-                    Open = decimal.Parse(c[1]),
-                    High = decimal.Parse(c[2]),
-                    Low = decimal.Parse(c[3]),
-                    Close = decimal.Parse(c[4]),
-                    Volume = decimal.Parse(c[5]),
+                    Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(c.Timestamp).DateTime,
+                    Open = decimal.Parse(c.Open),
+                    High = decimal.Parse(c.High),
+                    Low = decimal.Parse(c.Low),
+                    Close = decimal.Parse(c.Close),
+                    Volume = decimal.Parse(c.BaseVolume),
                     Symbol = symbol
                 }).OrderBy(c => c.Timestamp).ToList();
 

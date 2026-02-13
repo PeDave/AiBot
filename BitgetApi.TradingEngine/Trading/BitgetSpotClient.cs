@@ -42,7 +42,7 @@ public class BitgetSpotClient
                     return response.Data.OrderId;
                 }
 
-                _logger.LogError("Failed to place spot market order: {Message}", response?.Msg ?? "Unknown error");
+                _logger.LogError("Failed to place spot market order: {Message}", response?.Message ?? "Unknown error");
             }
 
             return string.Empty;

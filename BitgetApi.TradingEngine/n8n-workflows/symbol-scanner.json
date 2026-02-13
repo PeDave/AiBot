@@ -1,0 +1,167 @@
+{
+  "name": "Symbol Scanner - Crypto Top Picks",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 4
+            }
+          ]
+        }
+      },
+      "name": "Schedule: Every 4 hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.coingecko.com/api/v3/coins/markets",
+        "qs": "vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=false",
+        "options": {}
+      },
+      "name": "Fetch Top 100 Cryptos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Score each crypto based on volume, momentum, and volatility\nconst items = $input.all();\nconst scored = [];\n\nfor (const item of items) {\n  const data = item.json;\n  \n  // Calculate scores\n  const volumeScore = Math.log(data.total_volume) / 10; // Logarithmic volume score\n  const momentumScore = data.price_change_percentage_24h || 0;\n  const volatilityScore = Math.abs(momentumScore) / 2;\n  \n  // Total score (weighted)\n  const totalScore = (volumeScore * 0.4) + (momentumScore * 0.4) + (volatilityScore * 0.2);\n  \n  scored.push({\n    json: {\n      symbol: data.symbol.toUpperCase() + 'USDT',\n      name: data.name,\n      price: data.current_price,\n      volume: data.total_volume,\n      momentum: momentumScore,\n      score: totalScore,\n      market_cap_rank: data.market_cap_rank\n    }\n  });\n}\n\n// Sort by score descending and take top 20\nscored.sort((a, b) => b.json.score - a.json.score);\nreturn scored.slice(0, 20);"
+      },
+      "name": "Score and Filter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.twitter.com/2/tweets/search/recent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "qs": "={{ \"query\": \"#\" + $json.symbol + \" OR $\" + $json.symbol + \" lang:en\", \"max_results\": \"10\" }}",
+        "options": {}
+      },
+      "name": "Fetch Twitter Sentiment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4",
+        "messages": {
+          "values": [
+            {
+              "message": "={{ \"role\": \"system\", \"content\": \"You are a crypto sentiment analyzer. Analyze these tweets and provide a sentiment score from 0-100 (0=very bearish, 50=neutral, 100=very bullish). Return only the number.\" }}",
+              "values": [
+                {
+                  "message": "={{ \"role\": \"user\", \"content\": \"Tweets about \" + $json.symbol + \": \" + JSON.stringify($('Fetch Twitter Sentiment').all()) }}"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Analyze Sentiment with OpenAI",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine technical and sentiment scores\nconst items = $input.all();\nconst symbols = [];\nconst reasoning = {};\n\n// Always include fixed symbols\nsymbols.push('BTCUSDT');\nsymbols.push('ETHUSDT');\nreasoning['BTCUSDT'] = 'Fixed core holding - Bitcoin';\nreasoning['ETHUSDT'] = 'Fixed core holding - Ethereum';\n\n// Add top 4 from analysis\nfor (let i = 0; i < Math.min(4, items.length); i++) {\n  const item = items[i].json;\n  const sentimentScore = parseInt($('Analyze Sentiment with OpenAI').item(i).json.output) || 50;\n  \n  // Combine technical score with sentiment\n  const finalScore = (item.score * 0.6) + (sentimentScore * 0.4);\n  \n  if (finalScore > 60 && !symbols.includes(item.symbol)) {\n    symbols.push(item.symbol);\n    reasoning[item.symbol] = `Score: ${finalScore.toFixed(1)}, ` +\n      `Momentum: ${item.momentum.toFixed(2)}%, ` +\n      `Sentiment: ${sentimentScore}, ` +\n      `Volume: $${(item.volume / 1e6).toFixed(0)}M`;\n  }\n}\n\nreturn [{\n  json: {\n    selectedSymbols: symbols.slice(0, 6),\n    reasoning: reasoning\n  }\n}];"
+      },
+      "name": "Final Selection",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5000/api/n8n/symbols",
+        "options": {},
+        "bodyParametersJson": "={{ JSON.stringify($json) }}"
+      },
+      "name": "Send to Trading Engine",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1450, 300]
+    }
+  ],
+  "connections": {
+    "Schedule: Every 4 hours": {
+      "main": [
+        [
+          {
+            "node": "Fetch Top 100 Cryptos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Top 100 Cryptos": {
+      "main": [
+        [
+          {
+            "node": "Score and Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score and Filter": {
+      "main": [
+        [
+          {
+            "node": "Fetch Twitter Sentiment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Twitter Sentiment": {
+      "main": [
+        [
+          {
+            "node": "Analyze Sentiment with OpenAI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Sentiment with OpenAI": {
+      "main": [
+        [
+          {
+            "node": "Final Selection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final Selection": {
+      "main": [
+        [
+          {
+            "node": "Send to Trading Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {},
+  "staticData": null
+}

@@ -119,7 +119,7 @@ public class FvgLiquidityStrategy : IStrategy
         var nearestZone = zones.OrderBy(z => Math.Abs(z.Price - currentPrice)).FirstOrDefault();
         if (nearestZone != null)
         {
-            confidence += Math.Min(nearestZone.Strength / 2, 10);
+            confidence += Math.Min((double)(nearestZone.Strength / 2), 10);
         }
 
         return Math.Min(confidence, 95);
