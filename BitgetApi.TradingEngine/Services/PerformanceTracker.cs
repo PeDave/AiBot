@@ -213,6 +213,11 @@ public class PerformanceTracker
         return -maxDrawdown; // Return as negative value
     }
 
+    public async Task<List<StrategyMetrics>> GetAllMetricsAsync()
+    {
+        return await GetAllStrategyMetricsAsync();
+    }
+
     public async Task SaveMetricsSnapshotAsync(StrategyMetrics metrics)
     {
         try
