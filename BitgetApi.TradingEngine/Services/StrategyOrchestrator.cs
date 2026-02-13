@@ -55,13 +55,13 @@ public class StrategyOrchestrator
         // ✅ ADD VERIFICATION
         if (_strategies.Count == 0)
         {
-            Console.WriteLine($"⚠️ WARNING: No strategies injected! Check Program.cs registration!");
+            _logger.LogWarning("⚠️ WARNING: No strategies injected! Check Program.cs registration!");
         }
         
         var enabledCount = _strategies.Count(s => s.IsEnabled);
         if (enabledCount == 0)
         {
-            Console.WriteLine($"⚠️ WARNING: All strategies are DISABLED! Check constructor defaults!");
+            _logger.LogWarning("⚠️ WARNING: All strategies are DISABLED! Check constructor defaults!");
         }
     }
 
@@ -123,41 +123,30 @@ public class StrategyOrchestrator
             _logger.LogInformation("✅ Fetched {Count} candles for {Symbol}", candles.Count, symbol);
 
             // ✅ ENHANCED DEBUG LOGGING
-            Console.WriteLine($"🔍 DEBUG: Total strategies: {_strategies.Count}");
-            Console.WriteLine($"🔍 DEBUG: Enabled strategies: {_strategies.Count(s => s.IsEnabled)}");
+            _logger.LogDebug("🔍 DEBUG: Total strategies: {Count}", _strategies.Count);
+            _logger.LogDebug("🔍 DEBUG: Enabled strategies: {Count}", _strategies.Count(s => s.IsEnabled));
             
             // ✅ ADD DETAILED STRATEGY INSPECTION
-            Console.WriteLine($"🔍 DEBUG: Detailed strategy list:");
+            _logger.LogDebug("🔍 DEBUG: Detailed strategy list:");
             foreach (var s in _strategies)
             {
-                Console.WriteLine($"   - Name={s.Name}, IsEnabled={s.IsEnabled}, Type={s.GetType().FullName}");
+                _logger.LogDebug("   - Name={Name}, IsEnabled={IsEnabled}, Type={Type}", s.Name, s.IsEnabled, s.GetType().FullName);
             }
 
-            // ✅ CREATE FILTERED LIST EXPLICITLY
+            // ✅ CREATE FILTERED LIST EXPLICITLY (fixes the issue where LINQ query wasn't being executed)
             var enabledStrategies = _strategies.Where(s => s.IsEnabled).ToList();
-            Console.WriteLine($"🔍 DEBUG: After .Where() filter: {enabledStrategies.Count} strategies");
+            _logger.LogDebug("🔍 DEBUG: After .Where() filter: {Count} strategies", enabledStrategies.Count);
 
             if (enabledStrategies.Count == 0)
             {
-                Console.WriteLine($"⚠️ WARNING: No enabled strategies after filter! This is a LINQ bug!");
-                Console.WriteLine($"⚠️ Falling back to manual filter...");
-                
-                // Manual filter fallback
-                enabledStrategies = new List<IStrategy>();
-                foreach (var s in _strategies)
-                {
-                    if (s.IsEnabled)
-                    {
-                        enabledStrategies.Add(s);
-                        Console.WriteLine($"   ✅ Manually added: {s.Name}");
-                    }
-                }
+                _logger.LogWarning("⚠️ WARNING: No enabled strategies found after filtering!");
+                return signals;
             }
 
             // ✅ USE EXPLICIT LIST IN LOOP
             foreach (var strategy in enabledStrategies)
             {
-                Console.WriteLine($"🚀 Running strategy: {strategy.Name}");
+                _logger.LogInformation("🚀 Running strategy: {Strategy}", strategy.Name);
                 
                 try
                 {
@@ -171,7 +160,7 @@ public class StrategyOrchestrator
                     }
                     else
                     {
-                        Console.WriteLine($"   ℹ️ {strategy.Name}: No signal");
+                        _logger.LogDebug("   ℹ️ {Strategy}: No signal", strategy.Name);
                     }
                 }
                 catch (Exception ex)
