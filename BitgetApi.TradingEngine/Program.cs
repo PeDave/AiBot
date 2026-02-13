@@ -12,6 +12,18 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container
 builder.Services.AddControllers();
 
+// Add OpenAPI/Swagger
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+    {
+        Title = "Bitget Trading Engine API",
+        Version = "v1",
+        Description = "REST API for N8N integration - Symbol scanning, strategy analysis, and performance tracking"
+    });
+});
+
 // Configure Bitget API Client
 var bitgetConfig = builder.Configuration.GetSection("Bitget");
 var credentials = new BitgetCredentials
@@ -67,6 +79,10 @@ builder.Services.AddSingleton<IStrategy>(sp =>
 // Register N8N Integration
 builder.Services.AddHttpClient<N8NWebhookClient>();
 
+// Register Market Data and Analysis Services
+builder.Services.AddSingleton<BitgetMarketDataService>();
+builder.Services.AddSingleton<SymbolScanner>();
+
 // Register Services
 builder.Services.AddSingleton<SymbolManager>();
 builder.Services.AddScoped<PerformanceTracker>();
@@ -93,6 +109,15 @@ using (var scope = app.Services.CreateScope())
 }
 
 // Configure the HTTP request pipeline
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "Trading Engine API v1");
+        options.RoutePrefix = "swagger";
+    });
+}
 
 app.UseAuthorization();
 app.MapControllers();
