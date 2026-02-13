@@ -212,13 +212,16 @@ public class StrategyOrchestrator
             var high24h = candles.TakeLast(24).Max(c => c.High);
             var low24h = candles.TakeLast(24).Min(c => c.Low);
 
+            var midpoint = (high24h + low24h) / 2;
+            var volatility = midpoint > 0 ? ((high24h - low24h) / midpoint) * 100 : 0m;
+            
             var marketData = new Dictionary<string, object>
             {
                 { "price", currentPrice },
                 { "volume24h", volume24h },
                 { "high24h", high24h },
                 { "low24h", low24h },
-                { "volatility", ((high24h - low24h) / low24h) * 100 }
+                { "volatility", volatility }
             };
 
             // Send to N8N for AI decision

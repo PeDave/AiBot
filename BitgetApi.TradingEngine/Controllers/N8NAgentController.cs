@@ -96,7 +96,8 @@ public class N8NAgentController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "❌ Error processing N8N decision for {Symbol}", decision.Symbol);
+            var symbol = decision?.Symbol ?? "Unknown";
+            _logger.LogError(ex, "❌ Error processing N8N decision for {Symbol}", symbol);
             return StatusCode(500, new { error = ex.Message });
         }
     }
