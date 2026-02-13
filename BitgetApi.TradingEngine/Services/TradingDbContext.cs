@@ -47,6 +47,10 @@ public class TradingDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).ValueGeneratedOnAdd();
             entity.Property(e => e.StrategyName).IsRequired();
+            
+            // Ignore the CurrentParameters property as it's a complex dictionary
+            // It's used for runtime data transfer, not for database storage
+            entity.Ignore(e => e.CurrentParameters);
         });
     }
 }
