@@ -1,4 +1,4 @@
-using BitgetApi;
+﻿using BitgetApi;
 using BitgetApi.TradingEngine.Models;
 using BitgetApi.TradingEngine.Models.N8N;
 using BitgetApi.TradingEngine.Strategies;
@@ -6,6 +6,7 @@ using BitgetApi.TradingEngine.Trading;
 using BitgetApi.TradingEngine.N8N;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
+using System.Globalization;
 
 namespace BitgetApi.TradingEngine.Services;
 
@@ -14,12 +15,13 @@ public class StrategyOrchestrator
     private readonly List<IStrategy> _strategies;
     private readonly N8NWebhookClient _n8nClient;
     private readonly PositionManager _positionManager;
-    private readonly RiskManager _riskManager;
+    private readonly RiskManager _riskManager;  
     private readonly PerformanceTracker _performanceTracker;
     private readonly SymbolManager _symbolManager;
     private readonly BitgetApiClient _bitgetClient;
     private readonly IConfiguration _configuration;
     private readonly ILogger<StrategyOrchestrator> _logger;
+    private readonly BitgetMarketDataService _marketDataService;
 
     public StrategyOrchestrator(
         IEnumerable<IStrategy> strategies,
@@ -30,7 +32,8 @@ public class StrategyOrchestrator
         SymbolManager symbolManager,
         BitgetApiClient bitgetClient,
         IConfiguration configuration,
-        ILogger<StrategyOrchestrator> logger)
+        ILogger<StrategyOrchestrator> logger,
+        BitgetMarketDataService marketDataService)
     {
         _strategies = strategies.ToList();
         _n8nClient = n8nClient;
@@ -41,6 +44,13 @@ public class StrategyOrchestrator
         _bitgetClient = bitgetClient;
         _configuration = configuration;
         _logger = logger;
+        _marketDataService = marketDataService;
+
+        Console.WriteLine($"🔍 [StrategyOrchestrator] Initialized with {_strategies.Count} strategies:");
+        foreach (var strat in _strategies)
+        {
+            Console.WriteLine($"   - {strat.Name}: IsEnabled={strat.IsEnabled}");
+        }
     }
 
     public async Task RunAnalysisAsync()
@@ -67,42 +77,77 @@ public class StrategyOrchestrator
     /// </summary>
     public async Task<List<Signal>> AnalyzeSymbolAsync(string symbol)
     {
+        _logger.LogInformation("📊 Analyzing {Symbol}...", symbol);
+
         var signals = new List<Signal>();
-        
+
         try
         {
-            // Fetch candle data
-            var candles = await FetchCandleDataAsync(symbol);
-            
-            if (candles.Count < 250)
+            // Fetch candles
+            var candles = await _marketDataService.GetCandlesAsync(symbol, "1h", 200);
+
+            // ✅ DEBUG LOGGING
+            Console.WriteLine($"🔍 DEBUG: Received {candles?.Count ?? 0} candles for {symbol}");
+
+            if (candles == null)
             {
-                _logger.LogWarning("Insufficient candle data for {Symbol}", symbol);
+                _logger.LogWarning("⚠️ Candles is NULL for {Symbol}", symbol);
                 return signals;
             }
 
-            // Generate signals from all enabled strategies
+            if (candles.Count == 0)
+            {
+                _logger.LogWarning("⚠️ Candles list is EMPTY for {Symbol}", symbol);
+                return signals;
+            }
+
+            if (candles.Count < 50)
+            {
+                _logger.LogWarning("⚠️ Insufficient candle data for {Symbol}: {Count} candles (need 50)",
+                    symbol, candles.Count);
+                return signals;
+            }
+
+            _logger.LogInformation("✅ Fetched {Count} candles for {Symbol}", candles.Count, symbol);
+
+            // ✅ ADD THIS BEFORE STRATEGY LOOP!
+            Console.WriteLine($"🔍 DEBUG: Total strategies: {_strategies.Count}");
+            Console.WriteLine($"🔍 DEBUG: Enabled strategies: {_strategies.Count(s => s.IsEnabled)}");
+
+            // Run strategies
             foreach (var strategy in _strategies.Where(s => s.IsEnabled))
             {
-                var signal = await strategy.GenerateSignalAsync(symbol, candles);
-                
-                if (signal != null)
+                try
                 {
-                    signals.Add(signal);
-                    _logger.LogInformation("Signal generated: {Strategy} {Type} for {Symbol} @ {Price}", 
-                        signal.Strategy, signal.Type, signal.Symbol, signal.EntryPrice);
+                    var signal = await strategy.GenerateSignalAsync(symbol, candles);
+
+                    if (signal != null)
+                    {
+                        signals.Add(signal);
+                        _logger.LogInformation("   ✅ {Strategy}: {Type} at ${Price} (confidence: {Confidence:F1}%)",
+                            strategy.Name, signal.Type, signal.EntryPrice, signal.Confidence);
+                    }
+                    else
+                    {
+                        _logger.LogDebug("   ℹ️ {Strategy}: No signal for {Symbol}", strategy.Name, symbol);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "❌ Error in strategy {Strategy} for {Symbol}", strategy.Name, symbol);
                 }
             }
 
             if (!signals.Any())
             {
-                _logger.LogDebug("No signals generated for {Symbol}", symbol);
+                _logger.LogDebug("ℹ️ No signals generated for {Symbol}", symbol);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing {Symbol}", symbol);
+            _logger.LogError(ex, "❌ Error analyzing {Symbol}", symbol);
         }
-        
+
         return signals;
     }
 
@@ -124,7 +169,7 @@ public class StrategyOrchestrator
             // If we have signals, send to N8N for decision
             if (signals.Count > 0)
             {
-                var candles = await FetchCandleDataAsync(symbol);
+                var candles = await _marketDataService.GetCandlesAsync(symbol, "1h", 200);
                 var currentPrice = candles.Last().Close;
                 var volume24h = candles.TakeLast(24).Sum(c => c.Volume);
 
@@ -295,11 +340,11 @@ public class StrategyOrchestrator
                 var candles = response.Data.Select(c => new Candle
                 {
                     Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(c.Timestamp).DateTime,
-                    Open = decimal.Parse(c.Open),
-                    High = decimal.Parse(c.High),
-                    Low = decimal.Parse(c.Low),
-                    Close = decimal.Parse(c.Close),
-                    Volume = decimal.Parse(c.BaseVolume),
+                    Open = decimal.Parse(c.Open, CultureInfo.InvariantCulture),
+                    High = decimal.Parse(c.High, CultureInfo.InvariantCulture),
+                    Low = decimal.Parse(c.Low, CultureInfo.InvariantCulture),
+                    Close = decimal.Parse(c.Close, CultureInfo.InvariantCulture),
+                    Volume = decimal.Parse(c.BaseVolume, CultureInfo.InvariantCulture),
                     Symbol = symbol
                 }).OrderBy(c => c.Timestamp).ToList();
 

@@ -80,7 +80,11 @@ builder.Services.AddSingleton<IStrategy>(sp =>
 builder.Services.AddHttpClient<N8NWebhookClient>();
 
 // Register Market Data and Analysis Services
-builder.Services.AddSingleton<BitgetMarketDataService>();
+builder.Services.AddHttpClient<BitgetMarketDataService>(client =>
+{
+    client.BaseAddress = new Uri("https://api.bitget.com");
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+});
 builder.Services.AddSingleton<SymbolScanner>();
 
 // Register Services
