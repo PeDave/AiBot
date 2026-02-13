@@ -194,27 +194,37 @@ public class StrategyOrchestrator
                 return;
             }
 
-            // Get signals
+            // Get signals from all strategies
             var signals = await AnalyzeSymbolAsync(symbol);
 
-            // If we have signals, send to N8N for decision
-            if (signals.Count > 0)
+            if (signals.Count == 0)
             {
-                var candles = await _marketDataService.GetCandlesAsync(symbol, "1h", 200);
-                var currentPrice = candles.Last().Close;
-                var volume24h = candles.TakeLast(24).Sum(c => c.Volume);
-
-                var marketData = new Dictionary<string, object>
-                {
-                    { "price", currentPrice },
-                    { "volume24h", volume24h }
-                };
-
-                var decision = await _n8nClient.SendStrategyAnalysisAsync(symbol, signals, marketData);
-
-                // Note: Actual trade execution happens when N8N calls back via /api/n8n/decision endpoint
-                // This is handled by the N8NAgentController
+                _logger.LogDebug("No signals for {Symbol}, skipping N8N", symbol);
+                return;
             }
+
+            _logger.LogInformation("📤 Sending {Count} signals for {Symbol} to N8N", signals.Count, symbol);
+
+            // Fetch additional market data
+            var candles = await _marketDataService.GetCandlesAsync(symbol, "1h", 200);
+            var currentPrice = candles.Last().Close;
+            var volume24h = candles.TakeLast(24).Sum(c => c.Volume);
+            var high24h = candles.TakeLast(24).Max(c => c.High);
+            var low24h = candles.TakeLast(24).Min(c => c.Low);
+
+            var marketData = new Dictionary<string, object>
+            {
+                { "price", currentPrice },
+                { "volume24h", volume24h },
+                { "high24h", high24h },
+                { "low24h", low24h },
+                { "volatility", ((high24h - low24h) / low24h) * 100 }
+            };
+
+            // Send to N8N for AI decision
+            var decision = await _n8nClient.SendStrategyAnalysisAsync(symbol, signals, marketData);
+
+            _logger.LogInformation("✅ Strategy analysis sent to N8N for {Symbol}", symbol);
         }
         catch (Exception ex)
         {
@@ -280,8 +290,12 @@ public class StrategyOrchestrator
             {
                 await _performanceTracker.SavePositionAsync(position);
                 
-                _logger.LogInformation("Trade executed successfully: {Symbol} {Side} ${Size} with {Leverage}x leverage", 
+                _logger.LogInformation("✅ Trade executed successfully: {Symbol} {Side} ${Size} with {Leverage}x leverage", 
                     decision.Symbol, decision.Trade.Direction, sizing.Value.positionSize, sizing.Value.leverage);
+            }
+            else
+            {
+                _logger.LogWarning("⚠️ Trade execution failed for {Symbol}", decision.Symbol);
             }
         }
         catch (Exception ex)

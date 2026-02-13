@@ -64,37 +64,40 @@ public class N8NAgentController : ControllerBase
         {
             if (decision == null)
             {
-                return BadRequest("No decision provided");
+                return BadRequest(new { error = "No decision provided" });
             }
 
-            _logger.LogInformation("Received decision from N8N for {Symbol}: {Decision}", 
+            _logger.LogInformation("📥 Received trade decision from N8N for {Symbol}: {Decision}", 
                 decision.Symbol, decision.Decision);
+
+            if (decision.Decision == "NO_ACTION")
+            {
+                _logger.LogInformation("ℹ️ N8N decided NO_ACTION for {Symbol}: {Reason}", 
+                    decision.Symbol, decision.Reasoning);
+                return Ok(new { status = "acknowledged", action = "none" });
+            }
 
             if (decision.Decision == "EXECUTE" && decision.Trade != null)
             {
+                _logger.LogInformation("🚀 N8N approved trade for {Symbol}: {Direction} at ${Price} (confidence: {Confidence}%)", 
+                    decision.Symbol, 
+                    decision.Trade.Direction, 
+                    decision.Trade.EntryPrice,
+                    decision.Trade.Confidence);
+
+                // Execute trade via StrategyOrchestrator
                 await _orchestrator.ExecuteTradeAsync(decision);
                 
-                return Ok(new
-                {
-                    success = true,
-                    message = $"Trade executed for {decision.Symbol}",
-                    decision = decision.Decision,
-                    confidence = decision.Trade.Confidence
-                });
+                return Ok(new { status = "executed", symbol = decision.Symbol });
             }
 
-            return Ok(new
-            {
-                success = true,
-                message = $"No action taken for {decision.Symbol}",
-                decision = decision.Decision,
-                reasoning = decision.Reasoning
-            });
+            _logger.LogWarning("⚠️ Invalid decision format from N8N for {Symbol}", decision.Symbol);
+            return BadRequest(new { error = "Invalid decision format" });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error processing decision from N8N");
-            return StatusCode(500, new { success = false, message = ex.Message });
+            _logger.LogError(ex, "❌ Error processing N8N decision for {Symbol}", decision.Symbol);
+            return StatusCode(500, new { error = ex.Message });
         }
     }
 
