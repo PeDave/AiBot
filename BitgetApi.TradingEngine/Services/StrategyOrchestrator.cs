@@ -51,6 +51,18 @@ public class StrategyOrchestrator
         {
             Console.WriteLine($"   - {strat.Name}: IsEnabled={strat.IsEnabled}");
         }
+        
+        // ✅ ADD VERIFICATION
+        if (_strategies.Count == 0)
+        {
+            Console.WriteLine($"⚠️ WARNING: No strategies injected! Check Program.cs registration!");
+        }
+        
+        var enabledCount = _strategies.Count(s => s.IsEnabled);
+        if (enabledCount == 0)
+        {
+            Console.WriteLine($"⚠️ WARNING: All strategies are DISABLED! Check constructor defaults!");
+        }
     }
 
     public async Task RunAnalysisAsync()
@@ -110,13 +122,43 @@ public class StrategyOrchestrator
 
             _logger.LogInformation("✅ Fetched {Count} candles for {Symbol}", candles.Count, symbol);
 
-            // ✅ ADD THIS BEFORE STRATEGY LOOP!
+            // ✅ ENHANCED DEBUG LOGGING
             Console.WriteLine($"🔍 DEBUG: Total strategies: {_strategies.Count}");
             Console.WriteLine($"🔍 DEBUG: Enabled strategies: {_strategies.Count(s => s.IsEnabled)}");
-
-            // Run strategies
-            foreach (var strategy in _strategies.Where(s => s.IsEnabled))
+            
+            // ✅ ADD DETAILED STRATEGY INSPECTION
+            Console.WriteLine($"🔍 DEBUG: Detailed strategy list:");
+            foreach (var s in _strategies)
             {
+                Console.WriteLine($"   - Name={s.Name}, IsEnabled={s.IsEnabled}, Type={s.GetType().FullName}");
+            }
+
+            // ✅ CREATE FILTERED LIST EXPLICITLY
+            var enabledStrategies = _strategies.Where(s => s.IsEnabled).ToList();
+            Console.WriteLine($"🔍 DEBUG: After .Where() filter: {enabledStrategies.Count} strategies");
+
+            if (enabledStrategies.Count == 0)
+            {
+                Console.WriteLine($"⚠️ WARNING: No enabled strategies after filter! This is a LINQ bug!");
+                Console.WriteLine($"⚠️ Falling back to manual filter...");
+                
+                // Manual filter fallback
+                enabledStrategies = new List<IStrategy>();
+                foreach (var s in _strategies)
+                {
+                    if (s.IsEnabled)
+                    {
+                        enabledStrategies.Add(s);
+                        Console.WriteLine($"   ✅ Manually added: {s.Name}");
+                    }
+                }
+            }
+
+            // ✅ USE EXPLICIT LIST IN LOOP
+            foreach (var strategy in enabledStrategies)
+            {
+                Console.WriteLine($"🚀 Running strategy: {strategy.Name}");
+                
                 try
                 {
                     var signal = await strategy.GenerateSignalAsync(symbol, candles);
@@ -129,7 +171,7 @@ public class StrategyOrchestrator
                     }
                     else
                     {
-                        _logger.LogDebug("   ℹ️ {Strategy}: No signal for {Symbol}", strategy.Name, symbol);
+                        Console.WriteLine($"   ℹ️ {strategy.Name}: No signal");
                     }
                 }
                 catch (Exception ex)
