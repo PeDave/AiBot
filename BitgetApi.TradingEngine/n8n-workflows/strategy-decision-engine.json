@@ -1,0 +1,249 @@
+{
+  "name": "Strategy Decision Engine",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "strategy-analysis",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Webhook: Receive Signals",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "strategy-analysis"
+    },
+    {
+      "parameters": {
+        "url": "https://api.twitter.com/2/tweets/search/recent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "qs": "={{ \"query\": \"#\" + $json.symbol + \" OR $\" + $json.symbol + \" crypto trading lang:en\", \"max_results\": \"20\" }}",
+        "options": {}
+      },
+      "name": "Fetch Twitter Posts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4",
+        "messages": {
+          "values": [
+            {
+              "message": "={{ \"role\": \"system\", \"content\": \"Analyze crypto sentiment from tweets. Return a JSON object with: {sentiment_score: 0-100, bullish_mentions: number, bearish_mentions: number, summary: string}\" }}",
+              "values": [
+                {
+                  "message": "={{ \"role\": \"user\", \"content\": \"Analyze sentiment for \" + $json.symbol + \" from these tweets: \" + JSON.stringify($('Fetch Twitter Posts').all()) }}"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "response_format": "json_object"
+        }
+      },
+      "name": "Analyze Sentiment",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate probability scores for each strategy\nconst webhook = $('Webhook: Receive Signals').first().json;\nconst sentiment = JSON.parse($('Analyze Sentiment').first().json.output);\nconst signals = webhook.signals;\nconst marketData = webhook.marketData;\n\nconst strategyScores = {};\nconst validSignals = [];\n\n// Score each strategy based on confidence and sentiment\nfor (const signal of signals) {\n  let probability = signal.confidence;\n  \n  // Adjust based on sentiment\n  if (signal.type === 'LONG' && sentiment.sentiment_score > 60) {\n    probability += (sentiment.sentiment_score - 60) * 0.3;\n  } else if (signal.type === 'SHORT' && sentiment.sentiment_score < 40) {\n    probability += (40 - sentiment.sentiment_score) * 0.3;\n  }\n  \n  // Boost if multiple bullish signals align\n  if (signal.type === 'LONG' && sentiment.bullish_mentions > sentiment.bearish_mentions) {\n    probability += 5;\n  } else if (signal.type === 'SHORT' && sentiment.bearish_mentions > sentiment.bullish_mentions) {\n    probability += 5;\n  }\n  \n  strategyScores[signal.strategy] = Math.min(probability, 100);\n  \n  // Only keep strategies > 70% probability\n  if (strategyScores[signal.strategy] > 70) {\n    validSignals.push(signal);\n  }\n}\n\nreturn [{\n  json: {\n    symbol: webhook.symbol,\n    validSignals: validSignals,\n    strategyScores: strategyScores,\n    sentiment: sentiment,\n    marketData: marketData\n  }\n}];"
+      },
+      "name": "Calculate Probabilities",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.validSignals.length }}",
+              "operation": "largerEqual",
+              "value2": 1
+            }
+          ]
+        }
+      },
+      "name": "Filter: Min 1 Valid Signal",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate signals into single trade decision\nconst data = $json;\nconst signals = data.validSignals;\n\nif (signals.length === 0) {\n  return [];\n}\n\n// Count LONG vs SHORT signals\nconst longSignals = signals.filter(s => s.type === 'LONG');\nconst shortSignals = signals.filter(s => s.type === 'SHORT');\n\nconst direction = longSignals.length >= shortSignals.length ? 'LONG' : 'SHORT';\nconst relevantSignals = direction === 'LONG' ? longSignals : shortSignals;\n\n// Calculate weighted averages\nconst totalConfidence = relevantSignals.reduce((sum, s) => sum + data.strategyScores[s.strategy], 0);\nconst avgEntry = relevantSignals.reduce((sum, s, i, arr) => {\n  const weight = data.strategyScores[s.strategy] / totalConfidence;\n  return sum + (s.entryPrice * weight);\n}, 0);\n\nconst avgStopLoss = relevantSignals.reduce((sum, s) => {\n  const weight = data.strategyScores[s.strategy] / totalConfidence;\n  return sum + (s.stopLoss * weight);\n}, 0);\n\nconst avgTakeProfit = relevantSignals.reduce((sum, s) => {\n  const weight = data.strategyScores[s.strategy] / totalConfidence;\n  return sum + (s.takeProfit * weight);\n}, 0);\n\nconst avgConfidence = totalConfidence / relevantSignals.length;\n\n// Calculate position size based on confidence (higher confidence = larger position)\nconst basePositionSize = 100; // $100 base\nconst positionSizeUsd = basePositionSize * (avgConfidence / 75); // Scale from 75% confidence\n\n// Calculate leverage (1x-10x based on risk)\nconst riskPercent = Math.abs((avgEntry - avgStopLoss) / avgEntry * 100);\nlet leverage = Math.floor(10 / (riskPercent * 2));\nleverage = Math.max(1, Math.min(leverage, 10)); // Clamp between 1x and 10x\n\nreturn [{\n  json: {\n    symbol: data.symbol,\n    validSignals: signals,\n    strategyScores: data.strategyScores,\n    sentiment: data.sentiment,\n    aggregated: {\n      direction: direction,\n      entryPrice: avgEntry,\n      stopLoss: avgStopLoss,\n      takeProfit: avgTakeProfit,\n      positionSizeUsd: positionSizeUsd,\n      leverage: leverage,\n      confidence: avgConfidence\n    }\n  }\n}];"
+      },
+      "name": "Aggregate Signals",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 200]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4",
+        "messages": {
+          "values": [
+            {
+              "message": "={{ \"role\": \"system\", \"content\": \"You are a trading analyst. Generate concise reasoning for a trade decision based on strategy signals and sentiment. Max 2 sentences.\" }}",
+              "values": [
+                {
+                  "message": "={{ \"role\": \"user\", \"content\": \"Symbol: \" + $json.symbol + \"\\nSignals: \" + $json.validSignals.length + \"/\" + Object.keys($json.strategyScores).length + \" strategies agree on \" + $json.aggregated.direction + \"\\nSentiment: \" + $json.sentiment.sentiment_score + \"% (\" + $json.sentiment.bullish_mentions + \" bullish, \" + $json.sentiment.bearish_mentions + \" bearish)\\nConfidence: \" + $json.aggregated.confidence.toFixed(1) + \"%\" }}"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Generate Reasoning",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [1450, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build final decision response\nconst data = $json;\nconst reasoning = $('Generate Reasoning').first().json.output;\n\nreturn [{\n  json: {\n    symbol: data.symbol,\n    decision: 'EXECUTE',\n    trade: {\n      direction: data.aggregated.direction,\n      entryPrice: data.aggregated.entryPrice,\n      stopLoss: data.aggregated.stopLoss,\n      takeProfit: data.aggregated.takeProfit,\n      positionSizeUsd: data.aggregated.positionSizeUsd,\n      leverage: data.aggregated.leverage,\n      confidence: data.aggregated.confidence\n    },\n    strategyScores: data.strategyScores,\n    reasoning: reasoning\n  }\n}];"
+      },
+      "name": "Build Decision",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1650, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    symbol: $('Webhook: Receive Signals').first().json.symbol,\n    decision: 'NO_ACTION',\n    strategyScores: $('Calculate Probabilities').first().json.strategyScores,\n    reasoning: 'No strategies passed 70% probability threshold'\n  }\n}];"
+      },
+      "name": "No Action Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}"
+      },
+      "name": "Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1850, 300]
+    }
+  ],
+  "connections": {
+    "Webhook: Receive Signals": {
+      "main": [
+        [
+          {
+            "node": "Fetch Twitter Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Twitter Posts": {
+      "main": [
+        [
+          {
+            "node": "Analyze Sentiment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Sentiment": {
+      "main": [
+        [
+          {
+            "node": "Calculate Probabilities",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Probabilities": {
+      "main": [
+        [
+          {
+            "node": "Filter: Min 1 Valid Signal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter: Min 1 Valid Signal": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Signals",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Action Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Signals": {
+      "main": [
+        [
+          {
+            "node": "Generate Reasoning",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Reasoning": {
+      "main": [
+        [
+          {
+            "node": "Build Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Decision": {
+      "main": [
+        [
+          {
+            "node": "Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Action Response": {
+      "main": [
+        [
+          {
+            "node": "Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {},
+  "staticData": null
+}
