@@ -16,7 +16,9 @@ public class N8NHostedService : IHostedService, IDisposable
     private string _n8nPort;
     private int _startupDelaySeconds;
     private string? _npxPath;
-    private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+    
+    private const int HealthCheckTimeoutSeconds = 3;
+    private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(HealthCheckTimeoutSeconds) };
 
     public N8NHostedService(
         ILogger<N8NHostedService> logger,
@@ -79,13 +81,7 @@ public class N8NHostedService : IHostedService, IDisposable
             startInfo.Environment["N8N_HOST"] = "localhost";
 
             // Inherit user PATH environment (important for Windows)
-            var userPath = Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.User);
-            var systemPath = Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.Machine);
-            var processPath = Environment.GetEnvironmentVariable("PATH");
-            
-            // Build combined PATH from available sources
-            var pathComponents = new[] { systemPath, userPath, processPath }
-                .Where(p => !string.IsNullOrEmpty(p));
+            var pathComponents = GetPathComponents();
             
             if (pathComponents.Any())
             {
@@ -254,18 +250,24 @@ public class N8NHostedService : IHostedService, IDisposable
     }
 
     /// <summary>
-    /// Searches for executable in PATH environment variable
+    /// Gets all available PATH components from system, user, and process environments
     /// </summary>
-    private string? FindInPath(string fileName)
+    private IEnumerable<string> GetPathComponents()
     {
-        // Combine system and user PATH
         var systemPath = Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.Machine);
         var userPath = Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.User);
         var processPath = Environment.GetEnvironmentVariable("PATH");
         
-        var pathComponents = new[] { systemPath, userPath, processPath }
-            .Where(p => !string.IsNullOrEmpty(p));
-        
+        return new[] { systemPath, userPath, processPath }
+            .Where(p => !string.IsNullOrEmpty(p))!;
+    }
+
+    /// <summary>
+    /// Searches for executable in PATH environment variable
+    /// </summary>
+    private string? FindInPath(string fileName)
+    {
+        var pathComponents = GetPathComponents();
         var combinedPath = string.Join(Path.PathSeparator, pathComponents);
         var paths = combinedPath.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries);
 
@@ -279,9 +281,10 @@ public class N8NHostedService : IHostedService, IDisposable
                     return fullPath;
                 }
             }
-            catch
+            catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
             {
-                // Ignore invalid paths
+                // Ignore invalid paths - these are expected when PATH contains unusual entries
+                _logger.LogDebug("Skipping invalid path {Path}: {Error}", path, ex.Message);
             }
         }
 
