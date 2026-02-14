@@ -19,6 +19,7 @@ public class N8NHostedService : IHostedService, IDisposable
     private volatile bool _isN8NReady = false;
     
     private const int HealthCheckTimeoutSeconds = 3;
+    private const int ProcessShutdownTimeoutMs = 5000;
     private static readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(HealthCheckTimeoutSeconds) };
 
     public bool IsReady => _isN8NReady;
@@ -154,34 +155,63 @@ public class N8NHostedService : IHostedService, IDisposable
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        if (!_isN8NEnabled || _n8nProcess == null)
+        if (!_isN8NEnabled)
         {
             return;
         }
 
+        _logger.LogInformation("🛑 Stopping N8N service...");
+
         try
         {
-            _logger.LogInformation("⏹️ Stopping N8N process...");
-
-            if (!_n8nProcess.HasExited)
+            if (_n8nProcess != null)
             {
-                _n8nProcess.Kill(entireProcessTree: true);
-                
-                // Wait up to 5 seconds for graceful shutdown
-                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                timeoutCts.CancelAfter(TimeSpan.FromSeconds(5));
-                
                 try
                 {
-                    await _n8nProcess.WaitForExitAsync(timeoutCts.Token);
+                    // Capture process ID first to avoid race condition with HasExited check
+                    var processId = _n8nProcess.Id;
+                    
+                    if (!_n8nProcess.HasExited)
+                    {
+                        _logger.LogInformation("🔪 Killing N8N process (PID: {ProcessId})...", processId);
+                        
+                        // Kill entire process tree (includes child processes)
+                        _n8nProcess.Kill(entireProcessTree: true);
+                        
+                        // Wait max 5 seconds for graceful exit
+                        // Using synchronous WaitForExit for reliable timeout behavior as 
+                        // CancellationToken cancellation may not interrupt process waiting
+                        if (!_n8nProcess.WaitForExit(ProcessShutdownTimeoutMs))
+                        {
+                            _logger.LogWarning("⚠️ N8N process did not exit gracefully within {Timeout}s", 
+                                ProcessShutdownTimeoutMs / 1000);
+                        }
+                        else
+                        {
+                            _logger.LogInformation("✅ N8N process stopped successfully (PID: {ProcessId})", processId);
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogInformation("ℹ️ N8N process already exited");
+                    }
                 }
-                catch (OperationCanceledException)
+                catch (InvalidOperationException)
                 {
-                    _logger.LogWarning("⚠️ N8N did not stop gracefully, forced termination");
+                    // Process may have been terminated externally or already disposed
+                    _logger.LogInformation("ℹ️ N8N process already terminated");
+                }
+                finally
+                {
+                    // Always dispose and null the process reference to prevent stale references
+                    _n8nProcess.Dispose();
+                    _n8nProcess = null;
                 }
             }
-
-            _logger.LogInformation("✅ N8N stopped successfully");
+            else
+            {
+                _logger.LogInformation("ℹ️ N8N was not started by this instance (external N8N detected)");
+            }
         }
         catch (Exception ex)
         {
