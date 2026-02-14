@@ -40,7 +40,7 @@ public class StrategyAnalysisService : BackgroundService
             var maxWaitSeconds = 30;
             var waited = 0;
             
-            while (!_n8nService.IsReady && waited < maxWaitSeconds)
+            while (!_n8nService.IsReady && waited < maxWaitSeconds && !stoppingToken.IsCancellationRequested)
             {
                 await Task.Delay(1000, stoppingToken);
                 waited++;

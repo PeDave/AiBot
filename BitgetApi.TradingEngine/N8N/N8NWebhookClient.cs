@@ -82,14 +82,14 @@ public class N8NWebhookClient
                 
                 if (attempt < maxRetries)
                 {
-                    var delay = retryDelayMs * attempt; // Exponential backoff
+                    var delay = retryDelayMs * attempt; // Linear backoff
                     _logger.LogWarning("⚠️ Retrying in {Delay}ms...", delay);
                     await Task.Delay(delay);
                 }
             }
             catch (HttpRequestException ex) when (attempt < maxRetries)
             {
-                var delay = retryDelayMs * attempt; // Exponential backoff
+                var delay = retryDelayMs * attempt; // Linear backoff
                 _logger.LogWarning("⚠️ Failed to send to N8N (attempt {Attempt}/{Max}): {Error}. Retrying in {Delay}ms...", 
                     attempt, maxRetries, ex.Message, delay);
                 await Task.Delay(delay);
