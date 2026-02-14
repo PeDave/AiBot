@@ -154,39 +154,49 @@ public class N8NHostedService : IHostedService, IDisposable
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        if (!_isN8NEnabled || _n8nProcess == null)
-        {
-            return;
-        }
+        _logger.LogInformation("🛑 Stopping N8N service...");
 
         try
         {
-            _logger.LogInformation("⏹️ Stopping N8N process...");
-
-            if (!_n8nProcess.HasExited)
+            if (_n8nProcess != null && !_n8nProcess.HasExited)
             {
+                _logger.LogInformation("🔪 Killing N8N process (PID: {ProcessId})...", _n8nProcess.Id);
+                
+                // Kill entire process tree (includes child processes)
                 _n8nProcess.Kill(entireProcessTree: true);
                 
-                // Wait up to 5 seconds for graceful shutdown
-                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                timeoutCts.CancelAfter(TimeSpan.FromSeconds(5));
+                // Wait max 5 seconds for graceful exit
+                if (!_n8nProcess.WaitForExit(5000))
+                {
+                    _logger.LogWarning("⚠️ N8N process did not exit gracefully within 5s");
+                }
+                else
+                {
+                    _logger.LogInformation("✅ N8N process stopped successfully (PID: {ProcessId})", _n8nProcess.Id);
+                }
                 
-                try
-                {
-                    await _n8nProcess.WaitForExitAsync(timeoutCts.Token);
-                }
-                catch (OperationCanceledException)
-                {
-                    _logger.LogWarning("⚠️ N8N did not stop gracefully, forced termination");
-                }
+                _n8nProcess.Dispose();
+                _n8nProcess = null;
             }
-
-            _logger.LogInformation("✅ N8N stopped successfully");
+            else if (_n8nProcess != null)
+            {
+                _logger.LogInformation("ℹ️ N8N process already exited");
+            }
+            else
+            {
+                _logger.LogInformation("ℹ️ N8N was not started by this instance (external N8N detected)");
+            }
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("No process is associated"))
+        {
+            _logger.LogInformation("ℹ️ N8N process already terminated");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "❌ Error stopping N8N process");
         }
+
+        await Task.CompletedTask;
     }
 
     /// <summary>
