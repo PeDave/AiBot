@@ -160,19 +160,23 @@ public class N8NHostedService : IHostedService, IDisposable
         {
             if (_n8nProcess != null && !_n8nProcess.HasExited)
             {
-                _logger.LogInformation("🔪 Killing N8N process (PID: {ProcessId})...", _n8nProcess.Id);
+                // Capture process ID before killing (accessing Id after exit may throw)
+                var processId = _n8nProcess.Id;
+                _logger.LogInformation("🔪 Killing N8N process (PID: {ProcessId})...", processId);
                 
                 // Kill entire process tree (includes child processes)
                 _n8nProcess.Kill(entireProcessTree: true);
                 
                 // Wait max 5 seconds for graceful exit
+                // Using synchronous WaitForExit to match problem statement requirements
+                // and ensure deterministic 5-second timeout behavior
                 if (!_n8nProcess.WaitForExit(5000))
                 {
                     _logger.LogWarning("⚠️ N8N process did not exit gracefully within 5s");
                 }
                 else
                 {
-                    _logger.LogInformation("✅ N8N process stopped successfully (PID: {ProcessId})", _n8nProcess.Id);
+                    _logger.LogInformation("✅ N8N process stopped successfully (PID: {ProcessId})", processId);
                 }
                 
                 _n8nProcess.Dispose();
@@ -187,8 +191,9 @@ public class N8NHostedService : IHostedService, IDisposable
                 _logger.LogInformation("ℹ️ N8N was not started by this instance (external N8N detected)");
             }
         }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("No process is associated"))
+        catch (InvalidOperationException)
         {
+            // Process may have been terminated externally or already disposed
             _logger.LogInformation("ℹ️ N8N process already terminated");
         }
         catch (Exception ex)
