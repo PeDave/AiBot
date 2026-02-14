@@ -16,6 +16,7 @@ public class N8NHostedService : IHostedService, IDisposable
     private string _n8nPort;
     private int _startupDelaySeconds;
     private string? _npxPath;
+    private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
 
     public N8NHostedService(
         ILogger<N8NHostedService> logger,
@@ -80,9 +81,15 @@ public class N8NHostedService : IHostedService, IDisposable
             // Inherit user PATH environment (important for Windows)
             var userPath = Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.User);
             var systemPath = Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.Machine);
-            if (!string.IsNullOrEmpty(userPath) && !string.IsNullOrEmpty(systemPath))
+            var processPath = Environment.GetEnvironmentVariable("PATH");
+            
+            // Build combined PATH from available sources
+            var pathComponents = new[] { systemPath, userPath, processPath }
+                .Where(p => !string.IsNullOrEmpty(p));
+            
+            if (pathComponents.Any())
             {
-                startInfo.Environment["PATH"] = $"{systemPath}{Path.PathSeparator}{userPath}";
+                startInfo.Environment["PATH"] = string.Join(Path.PathSeparator, pathComponents);
                 _logger.LogDebug("PATH environment: {Path}", startInfo.Environment["PATH"]);
             }
 
@@ -208,8 +215,7 @@ public class N8NHostedService : IHostedService, IDisposable
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "nodejs", "npx.cmd"),
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "nodejs", "npx.cmd"),
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "npm", "npx.cmd"),
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "nodejs", "npx.cmd"),
-                Path.Combine(Environment.GetEnvironmentVariable("APPDATA") ?? "", "npm", "npx.cmd")
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "nodejs", "npx.cmd")
             };
 
             foreach (var path in commonPaths)
@@ -253,11 +259,15 @@ public class N8NHostedService : IHostedService, IDisposable
     private string? FindInPath(string fileName)
     {
         // Combine system and user PATH
-        var systemPath = Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.Machine) ?? "";
-        var userPath = Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.User) ?? "";
-        var processPath = Environment.GetEnvironmentVariable("PATH") ?? "";
+        var systemPath = Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.Machine);
+        var userPath = Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.User);
+        var processPath = Environment.GetEnvironmentVariable("PATH");
         
-        var paths = $"{systemPath}{Path.PathSeparator}{userPath}{Path.PathSeparator}{processPath}".Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries);
+        var pathComponents = new[] { systemPath, userPath, processPath }
+            .Where(p => !string.IsNullOrEmpty(p));
+        
+        var combinedPath = string.Join(Path.PathSeparator, pathComponents);
+        var paths = combinedPath.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries);
 
         foreach (var path in paths)
         {
@@ -285,8 +295,7 @@ public class N8NHostedService : IHostedService, IDisposable
     {
         try
         {
-            using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
-            var response = await httpClient.GetAsync($"http://localhost:{_n8nPort}/");
+            var response = await _httpClient.GetAsync($"http://localhost:{_n8nPort}/");
             return response.IsSuccessStatusCode;
         }
         catch
