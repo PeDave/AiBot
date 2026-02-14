@@ -208,6 +208,10 @@ public class StrategyOrchestrator
             var useN8N = _configuration.GetValue<bool>("Trading:UseN8NForDecisions", true);
             var allowFallback = _configuration.GetValue<bool>("Trading:FallbackToDirectTrading", true);
 
+            // Fetch market data once (used by both N8N and fallback paths)
+            var candles = await _marketDataService.GetCandlesAsync(symbol, "1h", 200);
+            var currentPrice = candles.Last().Close;
+
             // Try N8N first if enabled
             if (useN8N)
             {
@@ -215,8 +219,6 @@ public class StrategyOrchestrator
                 {
                     _logger.LogInformation("📤 Sending signals to N8N for {Symbol}", symbol);
 
-                    var candles = await _marketDataService.GetCandlesAsync(symbol, "1h", 200);
-                    var currentPrice = candles.Last().Close;
                     var volume24h = candles.TakeLast(24).Sum(c => c.Volume);
                     var high24h = candles.TakeLast(24).Max(c => c.High);
                     var low24h = candles.TakeLast(24).Min(c => c.Low);
@@ -261,16 +263,12 @@ public class StrategyOrchestrator
             var defaultPositionSizeUsd = _configuration.GetValue<decimal>("Trading:DefaultPositionSizeUsd", 100m);
             var defaultLeverage = _configuration.GetValue<int>("Trading:DefaultLeverage", 5);
 
-            // Fetch current market data once (to avoid duplicate API calls)
-            var candles2 = await _marketDataService.GetCandlesAsync(symbol, "1h", 200);
-            var currentPrice2 = candles2.Last().Close;
-
             // Process LONG signals
             if (longSignals.Count >= minAgreement)
             {
                 var decision = await ProcessSignalConsensusAsync(
                     symbol, longSignals, signals.Count, "LONG",
-                    minConfidence, currentPrice2, defaultPositionSizeUsd, defaultLeverage);
+                    minConfidence, currentPrice, defaultPositionSizeUsd, defaultLeverage);
 
                 if (decision != null)
                 {
@@ -284,7 +282,7 @@ public class StrategyOrchestrator
             {
                 var decision = await ProcessSignalConsensusAsync(
                     symbol, shortSignals, signals.Count, "SHORT",
-                    minConfidence, currentPrice2, defaultPositionSizeUsd, defaultLeverage);
+                    minConfidence, currentPrice, defaultPositionSizeUsd, defaultLeverage);
 
                 if (decision != null)
                 {

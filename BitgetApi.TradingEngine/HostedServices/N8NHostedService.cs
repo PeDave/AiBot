@@ -10,6 +10,7 @@ public class N8NHostedService : IHostedService, IDisposable
 {
     private readonly ILogger<N8NHostedService> _logger;
     private readonly IConfiguration _configuration;
+    private readonly IHttpClientFactory _httpClientFactory;
     private Process? _n8nProcess;
     private bool _isN8NEnabled;
     private string _n8nPort;
@@ -17,10 +18,12 @@ public class N8NHostedService : IHostedService, IDisposable
 
     public N8NHostedService(
         ILogger<N8NHostedService> logger,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IHttpClientFactory httpClientFactory)
     {
         _logger = logger;
         _configuration = configuration;
+        _httpClientFactory = httpClientFactory;
         _isN8NEnabled = configuration.GetValue<bool>("N8N:Enabled", false);
         _n8nPort = configuration.GetValue<string>("N8N:Port", "5678");
         _startupDelaySeconds = configuration.GetValue<int>("N8N:StartupDelaySeconds", 10);
@@ -163,8 +166,10 @@ public class N8NHostedService : IHostedService, IDisposable
     {
         try
         {
-            using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
-            var response = await httpClient.GetAsync($"http://localhost:{_n8nPort}/healthz");
+            var httpClient = _httpClientFactory.CreateClient();
+            httpClient.Timeout = TimeSpan.FromSeconds(3);
+            // N8N health check endpoint - verify root endpoint is accessible
+            var response = await httpClient.GetAsync($"http://localhost:{_n8nPort}/");
             return response.IsSuccessStatusCode;
         }
         catch
