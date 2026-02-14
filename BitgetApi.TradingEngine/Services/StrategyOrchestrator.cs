@@ -205,7 +205,52 @@ public class StrategyOrchestrator
 
             _logger.LogInformation("📊 Found {Count} signals for {Symbol}", signals.Count, symbol);
 
-            // ✅ DIRECT TRADING LOGIC - Aggregate signals and make decision
+            var useN8N = _configuration.GetValue<bool>("Trading:UseN8NForDecisions", true);
+            var allowFallback = _configuration.GetValue<bool>("Trading:FallbackToDirectTrading", true);
+
+            // Fetch market data once (used by both N8N and fallback paths)
+            var candles = await _marketDataService.GetCandlesAsync(symbol, "1h", 200);
+            var currentPrice = candles.Last().Close;
+
+            // Try N8N first if enabled
+            if (useN8N)
+            {
+                try
+                {
+                    _logger.LogInformation("📤 Sending signals to N8N for {Symbol}", symbol);
+
+                    var volume24h = candles.TakeLast(24).Sum(c => c.Volume);
+                    var high24h = candles.TakeLast(24).Max(c => c.High);
+                    var low24h = candles.TakeLast(24).Min(c => c.Low);
+                    var midpoint = (high24h + low24h) / 2;
+                    var volatility = midpoint > 0 ? ((high24h - low24h) / midpoint) * 100 : 0m;
+
+                    var marketData = new Dictionary<string, object>
+                    {
+                        { "price", currentPrice },
+                        { "volume24h", volume24h },
+                        { "high24h", high24h },
+                        { "low24h", low24h },
+                        { "volatility", volatility }
+                    };
+
+                    await _n8nClient.SendStrategyAnalysisAsync(symbol, signals, marketData);
+                    _logger.LogInformation("✅ Signals sent to N8N for {Symbol}", symbol);
+                    return; // N8N will callback via /api/n8n/decision
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "⚠️ Failed to send to N8N, fallback: {Fallback}", allowFallback);
+                    
+                    if (!allowFallback)
+                    {
+                        throw;
+                    }
+                    // Fall through to direct trading logic below
+                }
+            }
+
+            // Direct trading logic (fallback or when N8N is disabled)
             var longSignals = signals.Where(s => s.Type == SignalType.LONG).ToList();
             var shortSignals = signals.Where(s => s.Type == SignalType.SHORT).ToList();
 
@@ -217,10 +262,6 @@ public class StrategyOrchestrator
             var minConfidence = _configuration.GetValue<decimal>("Trading:MinConfidence", 60m);
             var defaultPositionSizeUsd = _configuration.GetValue<decimal>("Trading:DefaultPositionSizeUsd", 100m);
             var defaultLeverage = _configuration.GetValue<int>("Trading:DefaultLeverage", 5);
-
-            // Fetch current market data once (to avoid duplicate API calls)
-            var candles = await _marketDataService.GetCandlesAsync(symbol, "1h", 200);
-            var currentPrice = candles.Last().Close;
 
             // Process LONG signals
             if (longSignals.Count >= minAgreement)
