@@ -87,7 +87,31 @@ builder.Services.AddSingleton<IStrategy, LLMAnalysisStrategy>(sp =>
 });
 
 // Register N8N Integration
-builder.Services.AddHttpClient<N8NWebhookClient>();
+builder.Services.AddHttpClient<N8NWebhookClient>()
+    .ConfigureHttpClient((serviceProvider, client) =>
+    {
+        // Read timeout from configuration for consistency
+        var config = serviceProvider.GetRequiredService<IConfiguration>();
+        var timeoutSeconds = config.GetValue<int>("N8N:TimeoutSeconds", 30);
+        client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
+    })
+    .ConfigurePrimaryHttpMessageHandler(() =>
+    {
+        return new SocketsHttpHandler
+        {
+            // Close connections after 2 minutes of inactivity
+            PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
+            
+            // Limit max connections to prevent accumulation
+            MaxConnectionsPerServer = 10,
+            
+            // Enable automatic decompression
+            AutomaticDecompression = System.Net.DecompressionMethods.All,
+            
+            // Connection lifetime before recycling
+            PooledConnectionLifetime = TimeSpan.FromMinutes(5)
+        };
+    });
 
 // Register Market Data and Analysis Services
 builder.Services.AddHttpClient<BitgetMarketDataService>(client =>

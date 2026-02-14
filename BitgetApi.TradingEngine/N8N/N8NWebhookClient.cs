@@ -13,6 +13,9 @@ public class N8NWebhookClient
     private readonly IConfiguration _configuration;
     private readonly ILogger<N8NWebhookClient> _logger;
     private readonly string _baseUrl;
+    private readonly int _timeoutSeconds;
+    private readonly int _maxRetries;
+    private readonly int _retryDelaySeconds;
 
     public N8NWebhookClient(
         HttpClient httpClient, 
@@ -23,14 +26,15 @@ public class N8NWebhookClient
         _configuration = configuration;
         _logger = logger;
         _baseUrl = configuration["N8N:WebhookBaseUrl"] ?? "";
+        _timeoutSeconds = configuration.GetValue<int>("N8N:TimeoutSeconds", 30);
+        _maxRetries = configuration.GetValue<int>("N8N:MaxRetries", 3);
+        _retryDelaySeconds = configuration.GetValue<int>("N8N:RetryDelaySeconds", 5);
     }
 
     public async Task<AgentDecision?> SendStrategyAnalysisAsync(string symbol, List<Signal> signals, Dictionary<string, object> marketData)
     {
-        var maxRetries = _configuration.GetValue<int>("N8N:MaxRetries", 3);
-        var retryDelayMs = _configuration.GetValue<int>("N8N:RetryDelayMs", 2000);
 
-        for (int attempt = 1; attempt <= maxRetries; attempt++)
+        for (int attempt = 1; attempt <= _maxRetries; attempt++)
         {
             try
             {
@@ -58,8 +62,8 @@ public class N8NWebhookClient
                 var json = JsonSerializer.Serialize(payload);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-                _logger.LogInformation("Sending strategy analysis to N8N for {Symbol} (attempt {Attempt}/{Max})", 
-                    symbol, attempt, maxRetries);
+                _logger.LogInformation("Sending strategy analysis to N8N for {Symbol} (attempt {Attempt}/{MaxRetries})", 
+                    symbol, attempt, _maxRetries);
 
                 var response = await _httpClient.PostAsync(url, content);
                 
@@ -79,30 +83,43 @@ public class N8NWebhookClient
                 }
 
                 _logger.LogWarning("Failed to get decision from N8N: {StatusCode}", response.StatusCode);
+            }
+            catch (TaskCanceledException)
+            {
+                _logger.LogError("❌ Error sending strategy analysis to N8N for {Symbol} (attempt {Attempt}/{MaxRetries}): TIMEOUT after {Timeout} seconds", 
+                    symbol, attempt, _maxRetries, _timeoutSeconds);
                 
-                if (attempt < maxRetries)
+                if (attempt >= _maxRetries)
                 {
-                    var delay = retryDelayMs * attempt; // Linear backoff
-                    _logger.LogWarning("⚠️ Retrying in {Delay}ms...", delay);
-                    await Task.Delay(delay);
+                    throw;
                 }
             }
-            catch (HttpRequestException ex) when (attempt < maxRetries)
+            catch (HttpRequestException ex)
             {
-                var delay = retryDelayMs * attempt; // Linear backoff
-                _logger.LogWarning("⚠️ Failed to send to N8N (attempt {Attempt}/{Max}): {Error}. Retrying in {Delay}ms...", 
-                    attempt, maxRetries, ex.Message, delay);
-                await Task.Delay(delay);
+                _logger.LogWarning("⚠️ Failed to send to N8N (attempt {Attempt}/{Max}): {Error}", 
+                    attempt, _maxRetries, ex.Message);
+                
+                if (attempt >= _maxRetries)
+                {
+                    throw;
+                }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "❌ Error sending strategy analysis to N8N for {Symbol} (attempt {Attempt}/{Max})", 
-                    symbol, attempt, maxRetries);
+                    symbol, attempt, _maxRetries);
                 
-                if (attempt == maxRetries)
+                if (attempt >= _maxRetries)
                 {
                     throw; // Re-throw on final attempt to trigger fallback
                 }
+            }
+
+            // Retry delay (only if not on last attempt)
+            if (attempt < _maxRetries)
+            {
+                _logger.LogWarning("⚠️ Retrying in {Delay} seconds", _retryDelaySeconds);
+                await Task.Delay(TimeSpan.FromSeconds(_retryDelaySeconds));
             }
         }
 
