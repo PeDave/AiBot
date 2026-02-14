@@ -15,17 +15,18 @@ public class StrategyAnalysisService : BackgroundService
     private readonly ILogger<StrategyAnalysisService> _logger;
     private readonly IServiceProvider _serviceProvider;
     private readonly IConfiguration _configuration;
-    private readonly HttpClient _httpClient; // ✅ For N8N health check
+    private readonly IHttpClientFactory _httpClientFactory;
 
     public StrategyAnalysisService(
         ILogger<StrategyAnalysisService> logger,
         IServiceProvider serviceProvider,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IHttpClientFactory httpClientFactory)
     {
         _logger = logger;
         _serviceProvider = serviceProvider;
         _configuration = configuration;
-        _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
+        _httpClientFactory = httpClientFactory;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -110,18 +111,21 @@ public class StrategyAnalysisService : BackgroundService
     {
         try
         {
-            var response = await _httpClient.GetAsync(url);
+            var httpClient = _httpClientFactory.CreateClient();
+            httpClient.Timeout = TimeSpan.FromSeconds(2);
+            
+            using var response = await httpClient.GetAsync(url);
             return response.IsSuccessStatusCode;
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogTrace(ex, "N8N not reachable at {Url}", url);
             return false;
         }
     }
 
     public override void Dispose()
     {
-        _httpClient?.Dispose();
         base.Dispose();
     }
 }
