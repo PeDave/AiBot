@@ -86,7 +86,7 @@ public class N8NWebhookClient
             }
             catch (TaskCanceledException)
             {
-                _logger.LogError("❌ Error sending strategy analysis to N8N for {Symbol} (attempt {Attempt}/{MaxRetries}): TIMEOUT after {Timeout}s", 
+                _logger.LogError("❌ Error sending strategy analysis to N8N for {Symbol} (attempt {Attempt}/{MaxRetries}): TIMEOUT after {Timeout} seconds", 
                     symbol, attempt, _maxRetries, _timeoutSeconds);
                 
                 if (attempt >= _maxRetries)
@@ -118,7 +118,7 @@ public class N8NWebhookClient
             // Retry delay (only if not on last attempt)
             if (attempt < _maxRetries)
             {
-                _logger.LogWarning("⚠️ Retrying in {Delay} seconds...", _retryDelaySeconds);
+                _logger.LogWarning("⚠️ Retrying in {Delay} seconds", _retryDelaySeconds);
                 await Task.Delay(TimeSpan.FromSeconds(_retryDelaySeconds));
             }
         }
