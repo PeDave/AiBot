@@ -16,7 +16,7 @@ public class N8NHostedService : IHostedService, IDisposable
     private string _n8nPort;
     private int _startupDelaySeconds;
     private string? _npxPath;
-    private bool _isN8NReady = false;
+    private volatile bool _isN8NReady = false;
     
     private const int HealthCheckTimeoutSeconds = 3;
     private static readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(HealthCheckTimeoutSeconds) };

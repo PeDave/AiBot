@@ -83,7 +83,7 @@ public class StrategyAnalysisService : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error in strategy analysis");
+                _logger.LogError(ex, "Error in strategy analysis service");
             }
 
             await Task.Delay(TimeSpan.FromMinutes(intervalMinutes), stoppingToken);
