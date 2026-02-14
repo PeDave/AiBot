@@ -1,8 +1,11 @@
 using BitgetApi.TradingEngine.Models;
-using BitgetApi.TradingEngine.Indicators;
 
 namespace BitgetApi.TradingEngine.Strategies;
 
+/// <summary>
+/// Swing Trading Strategy
+/// Identifies swing highs/lows and trend reversals
+/// </summary>
 public class SwingStrategy : IStrategy
 {
     public string Name => "Swing";
@@ -10,189 +13,146 @@ public class SwingStrategy : IStrategy
     public bool IsEnabled { get; set; } = true;
     public Dictionary<string, object> Parameters { get; set; }
 
-    private readonly VolumeIndicator _volumeIndicator;
+    private int _swingPeriod = 5;
+    private decimal _minSwingPercent = 2.0m;
 
     public SwingStrategy(Dictionary<string, object>? parameters = null)
     {
-        Parameters = parameters ?? new Dictionary<string, object>
-        {
-            { "swing_lookback", 20 },
-            { "min_swing_distance_percent", 2.0 },
-            { "volume_multiplier", 1.3 },
-            { "tp_ratio", 1.0 },
-            { "sl_ratio", 0.5 }
-        };
-
-        _volumeIndicator = new VolumeIndicator();
+        Parameters = parameters ?? new Dictionary<string, object>();
+        IsEnabled = true;
+        
+        if (Parameters.ContainsKey("swing_period"))
+            _swingPeriod = Convert.ToInt32(Parameters["swing_period"]);
+        if (Parameters.ContainsKey("min_swing_percent"))
+            _minSwingPercent = Convert.ToDecimal(Parameters["min_swing_percent"]);
     }
 
-    public Task<Signal?> GenerateSignalAsync(string symbol, List<Candle> candles)
+    public async Task<Signal?> GenerateSignalAsync(string symbol, List<Candle> candles)
     {
-        if (candles.Count < 50)
-            return Task.FromResult<Signal?>(null);
-
-        var lookback = GetParameter<int>("swing_lookback");
-        var minDistancePercent = GetParameter<double>("min_swing_distance_percent");
-        var volumeMultiplier = GetParameter<double>("volume_multiplier");
-        var tpRatio = GetParameter<double>("tp_ratio");
-        var slRatio = GetParameter<double>("sl_ratio");
-
-        var swingHighs = FindSwingHighs(candles, lookback);
-        var swingLows = FindSwingLows(candles, lookback);
-        var currentPrice = candles.Last().Close;
-        var volumeSpike = _volumeIndicator.IsVolumeSpike(candles, volumeMultiplier);
-
-        // Check for bounce from swing low (Long setup)
-        var lastSwingLow = swingLows.LastOrDefault();
-        if (lastSwingLow > 0)
+        Console.WriteLine($"🔍 [Swing] Analyzing {symbol} with {candles.Count} candles");
+        
+        try
         {
-            var distancePercent = (double)((currentPrice - lastSwingLow) / lastSwingLow * 100);
-            
-            // Price bouncing from swing low with volume
-            if (distancePercent >= 0 && distancePercent <= minDistancePercent && volumeSpike)
+            if (candles.Count < _swingPeriod * 3)
             {
-                var prevSwingHigh = swingHighs.LastOrDefault();
-                var targetPrice = prevSwingHigh > 0 ? prevSwingHigh : currentPrice * (1 + (decimal)minDistancePercent / 100);
-                var distance = targetPrice - currentPrice;
-
-                var signal = new Signal
-                {
-                    Symbol = symbol,
-                    Strategy = Name,
-                    Type = SignalType.LONG,
-                    EntryPrice = currentPrice,
-                    StopLoss = lastSwingLow * (1 - (decimal)(slRatio / 100)),
-                    TakeProfit = currentPrice + (distance * (decimal)tpRatio),
-                    Confidence = CalculateConfidence(distancePercent, volumeSpike, true),
-                    Reason = $"Bounce from swing low at {lastSwingLow:F2}, target swing high {targetPrice:F2}"
-                };
-
-                signal.Metadata["swing_low"] = lastSwingLow;
-                signal.Metadata["swing_high"] = prevSwingHigh;
-
-                return Task.FromResult<Signal?>(signal);
+                Console.WriteLine($"⚠️ [Swing] Not enough candles (need {_swingPeriod * 3})");
+                return await Task.FromResult<Signal?>(null);
             }
+
+            var recentCandles = candles.TakeLast(_swingPeriod * 3).ToList();
+            var currentPrice = candles.Last().Close;
+
+            // Find swing low (potential buy)
+            var swingLow = FindSwingLow(recentCandles, _swingPeriod);
+            if (swingLow.HasValue)
+            {
+                var swingPercent = ((currentPrice - swingLow.Value) / swingLow.Value) * 100;
+                
+                if (swingPercent >= _minSwingPercent && currentPrice > swingLow.Value)
+                {
+                    var stopLoss = swingLow.Value * 0.98m;
+                    var riskAmount = currentPrice - stopLoss;
+                    var takeProfit = currentPrice + (riskAmount * 2m);
+                    var confidence = Math.Min(85m, 50m + swingPercent * 2m);
+
+                    Console.WriteLine($"✅ [Swing] Swing low detected at ${swingLow.Value:F2}, bounce {swingPercent:F2}%");
+
+                    return await Task.FromResult(new Signal
+                    {
+                        Symbol = symbol,
+                        Strategy = Name,
+                        Type = SignalType.LONG,
+                        EntryPrice = currentPrice,
+                        StopLoss = stopLoss,
+                        TakeProfit = takeProfit,
+                        Confidence = (double)confidence,
+                        Reason = $"Swing low reversal at ${swingLow.Value:F2}, bounce {swingPercent:F2}%",
+                        Timestamp = DateTime.UtcNow
+                    });
+                }
+            }
+
+            // Find swing high (potential sell)
+            var swingHigh = FindSwingHigh(recentCandles, _swingPeriod);
+            if (swingHigh.HasValue)
+            {
+                var swingPercent = ((swingHigh.Value - currentPrice) / swingHigh.Value) * 100;
+                
+                if (swingPercent >= _minSwingPercent && currentPrice < swingHigh.Value)
+                {
+                    var stopLoss = swingHigh.Value * 1.02m;
+                    var riskAmount = stopLoss - currentPrice;
+                    var takeProfit = currentPrice - (riskAmount * 2m);
+                    var confidence = Math.Min(85m, 50m + swingPercent * 2m);
+
+                    Console.WriteLine($"✅ [Swing] Swing high detected at ${swingHigh.Value:F2}, drop {swingPercent:F2}%");
+
+                    return await Task.FromResult(new Signal
+                    {
+                        Symbol = symbol,
+                        Strategy = Name,
+                        Type = SignalType.SHORT,
+                        EntryPrice = currentPrice,
+                        StopLoss = stopLoss,
+                        TakeProfit = takeProfit,
+                        Confidence = (double)confidence,
+                        Reason = $"Swing high reversal at ${swingHigh.Value:F2}, drop {swingPercent:F2}%",
+                        Timestamp = DateTime.UtcNow
+                    });
+                }
+            }
+
+            Console.WriteLine($"ℹ️ [Swing] No swing reversal detected");
+            return await Task.FromResult<Signal?>(null);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ [Swing] ERROR: {ex.Message}");
+            throw;
+        }
+    }
+
+    private decimal? FindSwingLow(List<Candle> candles, int period)
+    {
+        if (candles.Count < period * 2 + 1) return null;
+
+        var midIndex = candles.Count - period - 1;
+        var midLow = candles[midIndex].Low;
+
+        // Check if mid is lower than all candles in period before and after
+        for (int i = midIndex - period; i < midIndex + period + 1; i++)
+        {
+            if (i != midIndex && candles[i].Low <= midLow)
+                return null;
         }
 
-        // Check for rejection from swing high (Short setup)
-        var lastSwingHigh = swingHighs.LastOrDefault();
-        if (lastSwingHigh > 0)
+        return midLow;
+    }
+
+    private decimal? FindSwingHigh(List<Candle> candles, int period)
+    {
+        if (candles.Count < period * 2 + 1) return null;
+
+        var midIndex = candles.Count - period - 1;
+        var midHigh = candles[midIndex].High;
+
+        // Check if mid is higher than all candles in period before and after
+        for (int i = midIndex - period; i < midIndex + period + 1; i++)
         {
-            var distancePercent = (double)((lastSwingHigh - currentPrice) / lastSwingHigh * 100);
-            
-            // Price rejecting from swing high with volume
-            if (distancePercent >= 0 && distancePercent <= minDistancePercent && volumeSpike)
-            {
-                var prevSwingLow = swingLows.LastOrDefault();
-                var targetPrice = prevSwingLow > 0 ? prevSwingLow : currentPrice * (1 - (decimal)minDistancePercent / 100);
-                var distance = currentPrice - targetPrice;
-
-                var signal = new Signal
-                {
-                    Symbol = symbol,
-                    Strategy = Name,
-                    Type = SignalType.SHORT,
-                    EntryPrice = currentPrice,
-                    StopLoss = lastSwingHigh * (1 + (decimal)(slRatio / 100)),
-                    TakeProfit = currentPrice - (distance * (decimal)tpRatio),
-                    Confidence = CalculateConfidence(distancePercent, volumeSpike, false),
-                    Reason = $"Rejection from swing high at {lastSwingHigh:F2}, target swing low {targetPrice:F2}"
-                };
-
-                signal.Metadata["swing_high"] = lastSwingHigh;
-                signal.Metadata["swing_low"] = prevSwingLow;
-
-                return Task.FromResult<Signal?>(signal);
-            }
+            if (i != midIndex && candles[i].High >= midHigh)
+                return null;
         }
 
-        return Task.FromResult<Signal?>(null);
+        return midHigh;
     }
 
     public void UpdateParameters(Dictionary<string, object> newParameters)
     {
-        foreach (var param in newParameters)
-        {
-            Parameters[param.Key] = param.Value;
-        }
-    }
-
-    private List<decimal> FindSwingHighs(List<Candle> candles, int lookback)
-    {
-        var swingHighs = new List<decimal>();
-
-        for (int i = lookback; i < candles.Count - lookback; i++)
-        {
-            var isSwingHigh = true;
-            
-            for (int j = 1; j <= lookback; j++)
-            {
-                if (candles[i].High <= candles[i - j].High || candles[i].High <= candles[i + j].High)
-                {
-                    isSwingHigh = false;
-                    break;
-                }
-            }
-
-            if (isSwingHigh)
-            {
-                swingHighs.Add(candles[i].High);
-            }
-        }
-
-        return swingHighs;
-    }
-
-    private List<decimal> FindSwingLows(List<Candle> candles, int lookback)
-    {
-        var swingLows = new List<decimal>();
-
-        for (int i = lookback; i < candles.Count - lookback; i++)
-        {
-            var isSwingLow = true;
-            
-            for (int j = 1; j <= lookback; j++)
-            {
-                if (candles[i].Low >= candles[i - j].Low || candles[i].Low >= candles[i + j].Low)
-                {
-                    isSwingLow = false;
-                    break;
-                }
-            }
-
-            if (isSwingLow)
-            {
-                swingLows.Add(candles[i].Low);
-            }
-        }
-
-        return swingLows;
-    }
-
-    private double CalculateConfidence(double distancePercent, bool volumeSpike, bool isLong)
-    {
-        var confidence = 65.0;
-
-        // Closer to swing level = higher confidence
-        confidence += (2.0 - distancePercent) * 5;
-
-        // Volume confirmation
-        if (volumeSpike)
-            confidence += 15;
-
-        return Math.Min(confidence, 90);
-    }
-
-    private T GetParameter<T>(string key)
-    {
-        if (Parameters.TryGetValue(key, out var value))
-        {
-            if (value is T typedValue)
-                return typedValue;
-            
-            return (T)Convert.ChangeType(value, typeof(T));
-        }
+        Parameters = newParameters;
         
-        throw new KeyNotFoundException($"Parameter '{key}' not found");
+        if (Parameters.ContainsKey("swing_period"))
+            _swingPeriod = Convert.ToInt32(Parameters["swing_period"]);
+        if (Parameters.ContainsKey("min_swing_percent"))
+            _minSwingPercent = Convert.ToDecimal(Parameters["min_swing_percent"]);
     }
 }
