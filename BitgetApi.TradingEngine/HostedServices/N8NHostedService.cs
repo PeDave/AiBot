@@ -25,7 +25,7 @@ public class N8NHostedService : IHostedService, IDisposable
         _configuration = configuration;
         _httpClientFactory = httpClientFactory;
         _isN8NEnabled = configuration.GetValue<bool>("N8N:Enabled", false);
-        _n8nPort = configuration.GetValue<string>("N8N:Port", "5678");
+        _n8nPort = configuration.GetValue<string>("N8N:Port") ?? "5678";
         _startupDelaySeconds = configuration.GetValue<int>("N8N:StartupDelaySeconds", 10);
     }
 
@@ -59,7 +59,9 @@ public class N8NHostedService : IHostedService, IDisposable
             var startInfo = new ProcessStartInfo
             {
                 FileName = "npx",
-                Arguments = $"n8n start --tunnel",
+                Arguments = _configuration.GetValue<bool>("N8N:UseTunnel", true) 
+                    ? "n8n start --tunnel" 
+                    : "n8n start",
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -153,7 +155,8 @@ public class N8NHostedService : IHostedService, IDisposable
                 CreateNoWindow = true
             });
 
-            process?.WaitForExit();
+            // Wait up to 5 seconds for the process to complete
+            process?.WaitForExit(5000);
             return process?.ExitCode == 0;
         }
         catch
@@ -167,9 +170,10 @@ public class N8NHostedService : IHostedService, IDisposable
         try
         {
             var httpClient = _httpClientFactory.CreateClient();
-            httpClient.Timeout = TimeSpan.FromSeconds(3);
+            // Use CancellationTokenSource for timeout instead of setting HttpClient.Timeout
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
             // N8N health check endpoint - verify root endpoint is accessible
-            var response = await httpClient.GetAsync($"http://localhost:{_n8nPort}/");
+            var response = await httpClient.GetAsync($"http://localhost:{_n8nPort}/", cts.Token);
             return response.IsSuccessStatusCode;
         }
         catch
