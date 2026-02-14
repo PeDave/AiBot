@@ -27,56 +27,86 @@ public class N8NWebhookClient
 
     public async Task<AgentDecision?> SendStrategyAnalysisAsync(string symbol, List<Signal> signals, Dictionary<string, object> marketData)
     {
-        try
+        var maxRetries = _configuration.GetValue<int>("N8N:MaxRetries", 3);
+        var retryDelayMs = _configuration.GetValue<int>("N8N:RetryDelayMs", 2000);
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++)
         {
-            var webhook = _configuration["N8N:StrategyAnalysisWebhook"];
-            var url = $"{_baseUrl}{webhook}";
-
-            var payload = new
+            try
             {
-                symbol,
-                signals = signals.Select(s => new
+                var webhook = _configuration["N8N:StrategyAnalysisWebhook"];
+                var url = $"{_baseUrl}{webhook}";
+
+                var payload = new
                 {
-                    strategy = s.Strategy,
-                    type = s.Type.ToString(),
-                    entryPrice = s.EntryPrice,
-                    stopLoss = s.StopLoss,
-                    takeProfit = s.TakeProfit,
-                    confidence = s.Confidence,
-                    reason = s.Reason
-                }),
-                marketData
-            };
+                    symbol,
+                    signals = signals.Select(s => new
+                    {
+                        strategy = s.Strategy,
+                        type = s.Type.ToString(),
+                        entryPrice = s.EntryPrice,
+                        stopLoss = s.StopLoss,
+                        takeProfit = s.TakeProfit,
+                        confidence = s.Confidence,
+                        reason = s.Reason,
+                        timestamp = s.Timestamp
+                    }),
+                    marketData,
+                    timestamp = DateTime.UtcNow
+                };
 
-            var json = JsonSerializer.Serialize(payload);
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
+                var json = JsonSerializer.Serialize(payload);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            _logger.LogInformation("Sending strategy analysis to N8N for {Symbol}", symbol);
+                _logger.LogInformation("Sending strategy analysis to N8N for {Symbol} (attempt {Attempt}/{Max})", 
+                    symbol, attempt, maxRetries);
 
-            var response = await _httpClient.PostAsync(url, content);
-            
-            if (response.IsSuccessStatusCode)
-            {
-                var responseJson = await response.Content.ReadAsStringAsync();
-                var decision = JsonSerializer.Deserialize<AgentDecision>(responseJson, new JsonSerializerOptions
+                var response = await _httpClient.PostAsync(url, content);
+                
+                if (response.IsSuccessStatusCode)
                 {
-                    PropertyNameCaseInsensitive = true
-                });
+                    var responseJson = await response.Content.ReadAsStringAsync();
+                    var decision = JsonSerializer.Deserialize<AgentDecision>(responseJson, new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    });
 
-                _logger.LogInformation("Received decision from N8N: {Decision} for {Symbol}", 
-                    decision?.Decision ?? "UNKNOWN", symbol);
+                    _logger.LogInformation("✅ Successfully sent signals to N8N for {Symbol}", symbol);
+                    _logger.LogInformation("Received decision from N8N: {Decision} for {Symbol}", 
+                        decision?.Decision ?? "UNKNOWN", symbol);
 
-                return decision;
+                    return decision;
+                }
+
+                _logger.LogWarning("Failed to get decision from N8N: {StatusCode}", response.StatusCode);
+                
+                if (attempt < maxRetries)
+                {
+                    var delay = retryDelayMs * attempt; // Exponential backoff
+                    _logger.LogWarning("⚠️ Retrying in {Delay}ms...", delay);
+                    await Task.Delay(delay);
+                }
             }
+            catch (HttpRequestException ex) when (attempt < maxRetries)
+            {
+                var delay = retryDelayMs * attempt; // Exponential backoff
+                _logger.LogWarning("⚠️ Failed to send to N8N (attempt {Attempt}/{Max}): {Error}. Retrying in {Delay}ms...", 
+                    attempt, maxRetries, ex.Message, delay);
+                await Task.Delay(delay);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "❌ Error sending strategy analysis to N8N for {Symbol} (attempt {Attempt}/{Max})", 
+                    symbol, attempt, maxRetries);
+                
+                if (attempt == maxRetries)
+                {
+                    throw; // Re-throw on final attempt to trigger fallback
+                }
+            }
+        }
 
-            _logger.LogWarning("Failed to get decision from N8N: {StatusCode}", response.StatusCode);
-            return null;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error sending strategy analysis to N8N for {Symbol}", symbol);
-            return null;
-        }
+        return null;
     }
 
     public async Task<bool> SendPerformanceMetricsAsync(List<StrategyMetrics> metrics, Dictionary<string, object> overallPerformance)

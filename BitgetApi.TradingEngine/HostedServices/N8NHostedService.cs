@@ -16,9 +16,12 @@ public class N8NHostedService : IHostedService, IDisposable
     private string _n8nPort;
     private int _startupDelaySeconds;
     private string? _npxPath;
+    private bool _isN8NReady = false;
     
     private const int HealthCheckTimeoutSeconds = 3;
     private static readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(HealthCheckTimeoutSeconds) };
+
+    public bool IsReady => _isN8NReady;
 
     public N8NHostedService(
         ILogger<N8NHostedService> logger,
@@ -46,7 +49,8 @@ public class N8NHostedService : IHostedService, IDisposable
             // Check if N8N is already running
             if (await IsN8NRunningAsync())
             {
-                _logger.LogInformation("✅ N8N is already running on http://localhost:{Port}", _n8nPort);
+                _logger.LogInformation("✅ N8N is already running on http://localhost:{Port}, skipping start", _n8nPort);
+                _isN8NReady = true;
                 return;
             }
 
@@ -134,6 +138,7 @@ public class N8NHostedService : IHostedService, IDisposable
             {
                 _logger.LogInformation("✅ N8N started successfully on http://localhost:{Port}", _n8nPort);
                 _logger.LogInformation("🌐 N8N UI: http://localhost:{Port}", _n8nPort);
+                _isN8NReady = true;
             }
             else
             {
