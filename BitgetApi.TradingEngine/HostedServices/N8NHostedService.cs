@@ -155,6 +155,11 @@ public class N8NHostedService : IHostedService, IDisposable
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
+        if (!_isN8NEnabled)
+        {
+            return;
+        }
+
         _logger.LogInformation("🛑 Stopping N8N service...");
 
         try
@@ -174,8 +179,8 @@ public class N8NHostedService : IHostedService, IDisposable
                         _n8nProcess.Kill(entireProcessTree: true);
                         
                         // Wait max 5 seconds for graceful exit
-                        // Using synchronous WaitForExit to match problem statement requirements
-                        // and ensure deterministic timeout behavior
+                        // Using synchronous WaitForExit for reliable timeout behavior as 
+                        // CancellationToken cancellation may not interrupt process waiting
                         if (!_n8nProcess.WaitForExit(ProcessShutdownTimeoutMs))
                         {
                             _logger.LogWarning("⚠️ N8N process did not exit gracefully within {Timeout}s", 
@@ -185,9 +190,6 @@ public class N8NHostedService : IHostedService, IDisposable
                         {
                             _logger.LogInformation("✅ N8N process stopped successfully (PID: {ProcessId})", processId);
                         }
-                        
-                        _n8nProcess.Dispose();
-                        _n8nProcess = null;
                     }
                     else
                     {
@@ -198,6 +200,12 @@ public class N8NHostedService : IHostedService, IDisposable
                 {
                     // Process may have been terminated externally or already disposed
                     _logger.LogInformation("ℹ️ N8N process already terminated");
+                }
+                finally
+                {
+                    // Always dispose and null the process reference to prevent stale references
+                    _n8nProcess.Dispose();
+                    _n8nProcess = null;
                 }
             }
             else
