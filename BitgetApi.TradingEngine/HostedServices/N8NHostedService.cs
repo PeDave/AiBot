@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 namespace BitgetApi.TradingEngine.HostedServices;
 
@@ -10,22 +11,23 @@ public class N8NHostedService : IHostedService, IDisposable
 {
     private readonly ILogger<N8NHostedService> _logger;
     private readonly IConfiguration _configuration;
-    private readonly IHttpClientFactory _httpClientFactory;
     private Process? _n8nProcess;
     private bool _isN8NEnabled;
     private string _n8nPort;
     private int _startupDelaySeconds;
+    private string? _npxPath;
+    
+    private const int HealthCheckTimeoutSeconds = 3;
+    private static readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(HealthCheckTimeoutSeconds) };
 
     public N8NHostedService(
         ILogger<N8NHostedService> logger,
-        IConfiguration configuration,
-        IHttpClientFactory httpClientFactory)
+        IConfiguration configuration)
     {
         _logger = logger;
         _configuration = configuration;
-        _httpClientFactory = httpClientFactory;
         _isN8NEnabled = configuration.GetValue<bool>("N8N:Enabled", false);
-        _n8nPort = configuration.GetValue<string>("N8N:Port") ?? "5678";
+        _n8nPort = configuration.GetValue<string>("N8N:Port", "5678");
         _startupDelaySeconds = configuration.GetValue<int>("N8N:StartupDelaySeconds", 10);
     }
 
@@ -48,17 +50,21 @@ public class N8NHostedService : IHostedService, IDisposable
                 return;
             }
 
-            // Check if NPX is available
-            if (!IsNpxAvailable())
+            // Resolve NPX path
+            _npxPath = ResolveNpxPath();
+            if (_npxPath == null)
             {
                 _logger.LogError("❌ NPX not found. Please install Node.js and npm first.");
                 _logger.LogError("   Download from: https://nodejs.org/");
+                _logger.LogError("   After installation, restart the application.");
                 return;
             }
 
+            _logger.LogInformation("✅ Found NPX at: {NpxPath}", _npxPath);
+
             var startInfo = new ProcessStartInfo
             {
-                FileName = "npx",
+                FileName = _npxPath,
                 Arguments = _configuration.GetValue<bool>("N8N:UseTunnel", true) 
                     ? "n8n start --tunnel" 
                     : "n8n start",
@@ -66,13 +72,22 @@ public class N8NHostedService : IHostedService, IDisposable
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 CreateNoWindow = true,
-                Environment =
-                {
-                    ["N8N_PORT"] = _n8nPort,
-                    ["N8N_PROTOCOL"] = "http",
-                    ["N8N_HOST"] = "localhost"
-                }
+                WorkingDirectory = Environment.CurrentDirectory
             };
+
+            // Set environment variables for N8N
+            startInfo.Environment["N8N_PORT"] = _n8nPort;
+            startInfo.Environment["N8N_PROTOCOL"] = "http";
+            startInfo.Environment["N8N_HOST"] = "localhost";
+
+            // Inherit user PATH environment (important for Windows)
+            var pathDirectories = GetPathDirectories();
+            
+            if (pathDirectories.Any())
+            {
+                startInfo.Environment["PATH"] = string.Join(Path.PathSeparator, pathDirectories);
+                _logger.LogDebug("PATH environment: {Path}", startInfo.Environment["PATH"]);
+            }
 
             _n8nProcess = new Process { StartInfo = startInfo };
 
@@ -82,6 +97,12 @@ public class N8NHostedService : IHostedService, IDisposable
                 if (!string.IsNullOrEmpty(e.Data))
                 {
                     _logger.LogDebug("[N8N] {Output}", e.Data);
+                    
+                    // Log important N8N messages
+                    if (e.Data.Contains("Editor is now accessible", StringComparison.OrdinalIgnoreCase))
+                    {
+                        _logger.LogInformation("🌐 N8N Editor is accessible");
+                    }
                 }
             };
 
@@ -89,7 +110,15 @@ public class N8NHostedService : IHostedService, IDisposable
             {
                 if (!string.IsNullOrEmpty(e.Data))
                 {
-                    _logger.LogWarning("[N8N] {Error}", e.Data);
+                    // Only log actual errors, not warnings
+                    if (e.Data.Contains("error", StringComparison.OrdinalIgnoreCase))
+                    {
+                        _logger.LogWarning("[N8N] {Error}", e.Data);
+                    }
+                    else
+                    {
+                        _logger.LogDebug("[N8N] {Message}", e.Data);
+                    }
                 }
             };
 
@@ -109,6 +138,7 @@ public class N8NHostedService : IHostedService, IDisposable
             else
             {
                 _logger.LogError("❌ N8N failed to start. Check if port {Port} is available.", _n8nPort);
+                _logger.LogError("   Try running manually: npx n8n start");
             }
         }
         catch (Exception ex)
@@ -131,7 +161,19 @@ public class N8NHostedService : IHostedService, IDisposable
             if (!_n8nProcess.HasExited)
             {
                 _n8nProcess.Kill(entireProcessTree: true);
-                await _n8nProcess.WaitForExitAsync(cancellationToken);
+                
+                // Wait up to 5 seconds for graceful shutdown
+                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                timeoutCts.CancelAfter(TimeSpan.FromSeconds(5));
+                
+                try
+                {
+                    await _n8nProcess.WaitForExitAsync(timeoutCts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    _logger.LogWarning("⚠️ N8N did not stop gracefully, forced termination");
+                }
             }
 
             _logger.LogInformation("✅ N8N stopped successfully");
@@ -142,38 +184,126 @@ public class N8NHostedService : IHostedService, IDisposable
         }
     }
 
-    private bool IsNpxAvailable()
+    /// <summary>
+    /// Resolves the full path to NPX executable
+    /// Checks common installation locations and PATH
+    /// </summary>
+    private string? ResolveNpxPath()
     {
-        try
-        {
-            var process = Process.Start(new ProcessStartInfo
-            {
-                FileName = "npx",
-                Arguments = "--version",
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                CreateNoWindow = true
-            });
+        var isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+        var npxName = isWindows ? "npx.cmd" : "npx";
 
-            // Wait up to 5 seconds for the process to complete
-            process?.WaitForExit(5000);
-            return process?.ExitCode == 0;
-        }
-        catch
+        _logger.LogDebug("Resolving NPX path (OS: {OS})...", isWindows ? "Windows" : "Unix");
+
+        // Try standard PATH lookup first
+        var pathFromEnv = FindInPath(npxName);
+        if (pathFromEnv != null)
         {
-            return false;
+            _logger.LogDebug("Found NPX in PATH: {Path}", pathFromEnv);
+            return pathFromEnv;
         }
+
+        // Windows: Check common installation locations
+        if (isWindows)
+        {
+            var commonPaths = new[]
+            {
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "nodejs", "npx.cmd"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "nodejs", "npx.cmd"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "npm", "npx.cmd"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "nodejs", "npx.cmd")
+            };
+
+            foreach (var path in commonPaths)
+            {
+                _logger.LogDebug("Checking: {Path}", path);
+                if (File.Exists(path))
+                {
+                    _logger.LogDebug("Found NPX at: {Path}", path);
+                    return path;
+                }
+            }
+        }
+
+        // Unix: Check common locations
+        if (!isWindows)
+        {
+            var unixPaths = new[]
+            {
+                "/usr/local/bin/npx",
+                "/usr/bin/npx",
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".npm-global", "bin", "npx")
+            };
+
+            foreach (var path in unixPaths)
+            {
+                if (File.Exists(path))
+                {
+                    _logger.LogDebug("Found NPX at: {Path}", path);
+                    return path;
+                }
+            }
+        }
+
+        _logger.LogWarning("NPX not found in common locations");
+        return null;
     }
 
+    /// <summary>
+    /// Gets all individual PATH directories from system, user, and process environments
+    /// </summary>
+    private IEnumerable<string> GetPathDirectories()
+    {
+        var systemPath = Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.Machine);
+        var userPath = Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.User);
+        var processPath = Environment.GetEnvironmentVariable("PATH");
+        
+        var allPaths = new[] { systemPath, userPath, processPath }
+            .Where(p => !string.IsNullOrEmpty(p))
+            .SelectMany(p => p!.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+            .Select(p => p.Trim())
+            .Where(p => !string.IsNullOrEmpty(p))
+            .Distinct();
+        
+        return allPaths;
+    }
+
+    /// <summary>
+    /// Searches for executable in PATH environment variable
+    /// </summary>
+    private string? FindInPath(string fileName)
+    {
+        var paths = GetPathDirectories();
+
+        foreach (var path in paths)
+        {
+            try
+            {
+                var fullPath = Path.Combine(path, fileName);
+                if (File.Exists(fullPath))
+                {
+                    return fullPath;
+                }
+            }
+            catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+            {
+                // Ignore invalid paths - these are expected when PATH contains unusual entries
+                _logger.LogDebug("Skipping invalid path {Path} ({ExceptionType}): {Error}", 
+                    path, ex.GetType().Name, ex.Message);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Checks if N8N is already running by attempting to connect to health endpoint
+    /// </summary>
     private async Task<bool> IsN8NRunningAsync()
     {
         try
         {
-            var httpClient = _httpClientFactory.CreateClient();
-            // Use CancellationTokenSource for timeout instead of setting HttpClient.Timeout
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-            // N8N health check endpoint - verify root endpoint is accessible
-            var response = await httpClient.GetAsync($"http://localhost:{_n8nPort}/", cts.Token);
+            var response = await _httpClient.GetAsync($"http://localhost:{_n8nPort}/");
             return response.IsSuccessStatusCode;
         }
         catch
