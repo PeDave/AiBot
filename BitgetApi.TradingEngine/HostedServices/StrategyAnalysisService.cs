@@ -112,9 +112,9 @@ public class StrategyAnalysisService : BackgroundService
         try
         {
             var httpClient = _httpClientFactory.CreateClient();
-            httpClient.Timeout = TimeSpan.FromSeconds(2);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
             
-            using var response = await httpClient.GetAsync(url);
+            using var response = await httpClient.GetAsync(url, cts.Token);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -122,10 +122,5 @@ public class StrategyAnalysisService : BackgroundService
             _logger.LogTrace(ex, "N8N not reachable at {Url}", url);
             return false;
         }
-    }
-
-    public override void Dispose()
-    {
-        base.Dispose();
     }
 }
