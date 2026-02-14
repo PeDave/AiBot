@@ -48,7 +48,7 @@ public class WeeklyDcaStrategy : IStrategy
             }
 
             // Check if already bought this week
-            if (_lastBuyDate.HasValue && (now - _lastBuyDate.Value).TotalDays < 6)
+            if (_lastBuyDate.HasValue && (now - _lastBuyDate.Value).TotalDays < 7)
             {
                 Console.WriteLine($"ℹ️ [Weekly_DCA] Already bought this week ({_lastBuyDate.Value:yyyy-MM-dd})");
                 return await Task.FromResult<Signal?>(null);

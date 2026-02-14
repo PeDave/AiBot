@@ -87,7 +87,7 @@ public class RsiVolumeEmaStrategy : IStrategy
             {
                 var stopLoss = currentPrice * 1.03m; // 3% stop loss
                 var takeProfit = currentPrice * 0.94m; // 6% take profit
-                var confidence = Math.Min(95m, rsi - 30m); // Higher RSI = higher confidence for short
+                var confidence = Math.Min(95m, 50m + (rsi - 70m)); // Higher RSI = higher confidence for short
 
                 Console.WriteLine($"✅ [RSI_Volume_EMA] SHORT signal at RSI {rsi:F2}");
 
@@ -142,11 +142,15 @@ public class RsiVolumeEmaStrategy : IStrategy
 
     private decimal CalculateEMA(List<Candle> candles, int period)
     {
-        var prices = candles.TakeLast(period).Select(c => c.Close).ToList();
+        // Use all available candles but at least 'period' candles
+        var prices = candles.Select(c => c.Close).ToList();
+        if (prices.Count < period)
+            return prices.Last(); // Not enough data, return current price
+            
         var multiplier = 2m / (period + 1);
-        var ema = prices.First();
+        var ema = prices.Take(period).Average(); // Start with SMA of first period
 
-        foreach (var price in prices.Skip(1))
+        foreach (var price in prices.Skip(period))
         {
             ema = (price - ema) * multiplier + ema;
         }
