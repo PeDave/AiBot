@@ -163,7 +163,7 @@ public class N8NHostedService : IHostedService, IDisposable
                 _n8nProcess.Kill(entireProcessTree: true);
                 
                 // Wait up to 5 seconds for graceful shutdown
-                var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 timeoutCts.CancelAfter(TimeSpan.FromSeconds(5));
                 
                 try
@@ -288,7 +288,8 @@ public class N8NHostedService : IHostedService, IDisposable
             catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
             {
                 // Ignore invalid paths - these are expected when PATH contains unusual entries
-                _logger.LogDebug("Skipping invalid path {Path}: {Error}", path, ex.Message);
+                _logger.LogDebug("Skipping invalid path {Path} ({ExceptionType}): {Error}", 
+                    path, ex.GetType().Name, ex.Message);
             }
         }
 
