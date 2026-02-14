@@ -71,4 +71,27 @@ public class SymbolManager
             return _activeSymbols.Contains(symbol);
         }
     }
+
+    public void UpdateWatchlist(List<string> newSymbols)
+    {
+        List<string> oldSymbolsList;
+        List<string> newSymbolsList;
+        
+        lock (_lock)
+        {
+            if (newSymbols == null || newSymbols.Count == 0)
+            {
+                _logger.LogWarning("⚠️ Cannot update watchlist with empty list");
+                return;
+            }
+
+            oldSymbolsList = new List<string>(_activeSymbols);
+            _activeSymbols = new List<string>(newSymbols);
+            newSymbolsList = new List<string>(_activeSymbols);
+        }
+
+        _logger.LogInformation("🔄 Watchlist updated:");
+        _logger.LogInformation("   Old: {Old}", string.Join(", ", oldSymbolsList));
+        _logger.LogInformation("   New: {New}", string.Join(", ", newSymbolsList));
+    }
 }

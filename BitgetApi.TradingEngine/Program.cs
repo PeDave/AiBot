@@ -76,6 +76,16 @@ builder.Services.AddSingleton<IStrategy>(sp =>
     return new WeeklyDcaStrategy(parameters);
 });
 
+// Register LLM Strategy
+builder.Services.AddHttpClient<LLMAnalysisStrategy>();
+builder.Services.AddSingleton<IStrategy, LLMAnalysisStrategy>(sp =>
+{
+    var logger = sp.GetRequiredService<ILogger<LLMAnalysisStrategy>>();
+    var config = sp.GetRequiredService<IConfiguration>();
+    var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(LLMAnalysisStrategy));
+    return new LLMAnalysisStrategy(logger, config, httpClient);
+});
+
 // Register N8N Integration
 builder.Services.AddHttpClient<N8NWebhookClient>();
 
@@ -87,6 +97,14 @@ builder.Services.AddHttpClient<BitgetMarketDataService>(client =>
 });
 builder.Services.AddSingleton<SymbolScanner>();
 
+// Register Altcoin Scanner
+builder.Services.AddHttpClient<AltcoinScannerService>(client =>
+{
+    client.BaseAddress = new Uri("https://api.bitget.com");
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+});
+builder.Services.AddSingleton<AltcoinScannerService>();
+
 // Register Services
 builder.Services.AddSingleton<SymbolManager>();
 builder.Services.AddScoped<PerformanceTracker>();
@@ -96,6 +114,7 @@ builder.Services.AddScoped<StrategyOrchestrator>();
 builder.Services.AddHostedService<StrategyAnalysisService>();
 builder.Services.AddHostedService<PerformanceReportingService>();
 builder.Services.AddHostedService<N8NHostedService>();
+builder.Services.AddHostedService<AltcoinScannerHostedService>();
 
 // Logging
 builder.Services.AddLogging(logging =>
