@@ -199,39 +199,159 @@ public class StrategyOrchestrator
 
             if (signals.Count == 0)
             {
-                _logger.LogDebug("No signals for {Symbol}, skipping N8N", symbol);
+                _logger.LogDebug("No signals for {Symbol}", symbol);
                 return;
             }
 
-            _logger.LogInformation("📤 Sending {Count} signals for {Symbol} to N8N", signals.Count, symbol);
+            _logger.LogInformation("📊 Found {Count} signals for {Symbol}", signals.Count, symbol);
 
-            // Fetch additional market data
-            var candles = await _marketDataService.GetCandlesAsync(symbol, "1h", 200);
-            var currentPrice = candles.Last().Close;
-            var volume24h = candles.TakeLast(24).Sum(c => c.Volume);
-            var high24h = candles.TakeLast(24).Max(c => c.High);
-            var low24h = candles.TakeLast(24).Min(c => c.Low);
+            // ✅ DIRECT TRADING LOGIC - Aggregate signals and make decision
+            var longSignals = signals.Where(s => s.Type == SignalType.LONG).ToList();
+            var shortSignals = signals.Where(s => s.Type == SignalType.SHORT).ToList();
 
-            var midpoint = (high24h + low24h) / 2;
-            var volatility = midpoint > 0 ? ((high24h - low24h) / midpoint) * 100 : 0m;
-            
-            var marketData = new Dictionary<string, object>
+            _logger.LogInformation("   📈 LONG signals: {LongCount}, 📉 SHORT signals: {ShortCount}", 
+                longSignals.Count, shortSignals.Count);
+
+            // Decision criteria: At least 2 strategies agree AND average confidence > 60%
+            var minAgreement = _configuration.GetValue<int>("Trading:MinStrategyAgreement", 2);
+            var minConfidence = _configuration.GetValue<decimal>("Trading:MinConfidence", 60m);
+
+            // Process LONG signals
+            if (longSignals.Count >= minAgreement)
             {
-                { "price", currentPrice },
-                { "volume24h", volume24h },
-                { "high24h", high24h },
-                { "low24h", low24h },
-                { "volatility", volatility }
-            };
+                var avgConfidence = longSignals.Average(s => s.Confidence);
+                var maxConfidence = longSignals.Max(s => s.Confidence);
+                var bestSignal = longSignals.OrderByDescending(s => s.Confidence).First();
 
-            // Send to N8N for AI decision
-            var decision = await _n8nClient.SendStrategyAnalysisAsync(symbol, signals, marketData);
+                _logger.LogInformation("   💡 LONG consensus: {Count} strategies, avg confidence: {AvgConf:F1}%, max: {MaxConf:F1}%",
+                    longSignals.Count, avgConfidence, maxConfidence);
 
-            _logger.LogInformation("✅ Strategy analysis sent to N8N for {Symbol}", symbol);
+                if ((decimal)avgConfidence >= minConfidence)
+                {
+                    _logger.LogInformation("✅ TRADE DECISION: LONG on {Symbol}", symbol);
+                    
+                    // List all agreeing strategies
+                    foreach (var sig in longSignals)
+                    {
+                        _logger.LogInformation("   - {Strategy}: {Confidence:F1}% - {Reason}", 
+                            sig.Strategy, sig.Confidence, sig.Reason);
+                    }
+
+                    // Fetch current market data
+                    var candles = await _marketDataService.GetCandlesAsync(symbol, "1h", 200);
+                    var currentPrice = candles.Last().Close;
+
+                    // Create trade decision
+                    var decision = new AgentDecision
+                    {
+                        Symbol = symbol,
+                        Decision = "EXECUTE",
+                        Trade = new TradeDecision
+                        {
+                            Direction = "LONG",
+                            EntryPrice = currentPrice,
+                            StopLoss = bestSignal.StopLoss,
+                            TakeProfit = bestSignal.TakeProfit,
+                            PositionSizeUsd = _configuration.GetValue<decimal>("Trading:DefaultPositionSizeUsd", 100m),
+                            Leverage = _configuration.GetValue<int>("Trading:DefaultLeverage", 5),
+                            Confidence = avgConfidence
+                        },
+                        StrategyScores = longSignals.ToDictionary(s => s.Strategy, s => s.Confidence),
+                        Reasoning = $"{longSignals.Count}/{signals.Count} strategies agree on LONG. " +
+                                   $"Average confidence: {avgConfidence:F1}%. " +
+                                   $"Strategies: {string.Join(", ", longSignals.Select(s => s.Strategy))}"
+                    };
+
+                    _logger.LogInformation("🚀 Executing LONG trade: ${Size} at ${Price}, SL: ${SL}, TP: ${TP}, Leverage: {Lev}x",
+                        decision.Trade.PositionSizeUsd,
+                        decision.Trade.EntryPrice,
+                        decision.Trade.StopLoss,
+                        decision.Trade.TakeProfit,
+                        decision.Trade.Leverage);
+
+                    await ExecuteTradeAsync(decision);
+                    return;
+                }
+                else
+                {
+                    _logger.LogInformation("⚠️ LONG consensus found but confidence too low ({AvgConf:F1}% < {MinConf}%)",
+                        avgConfidence, minConfidence);
+                }
+            }
+
+            // Process SHORT signals
+            if (shortSignals.Count >= minAgreement)
+            {
+                var avgConfidence = shortSignals.Average(s => s.Confidence);
+                var maxConfidence = shortSignals.Max(s => s.Confidence);
+                var bestSignal = shortSignals.OrderByDescending(s => s.Confidence).First();
+
+                _logger.LogInformation("   💡 SHORT consensus: {Count} strategies, avg confidence: {AvgConf:F1}%, max: {MaxConf:F1}%",
+                    shortSignals.Count, avgConfidence, maxConfidence);
+
+                if ((decimal)avgConfidence >= minConfidence)
+                {
+                    _logger.LogInformation("✅ TRADE DECISION: SHORT on {Symbol}", symbol);
+                    
+                    // List all agreeing strategies
+                    foreach (var sig in shortSignals)
+                    {
+                        _logger.LogInformation("   - {Strategy}: {Confidence:F1}% - {Reason}", 
+                            sig.Strategy, sig.Confidence, sig.Reason);
+                    }
+
+                    // Fetch current market data
+                    var candles = await _marketDataService.GetCandlesAsync(symbol, "1h", 200);
+                    var currentPrice = candles.Last().Close;
+
+                    // Create trade decision
+                    var decision = new AgentDecision
+                    {
+                        Symbol = symbol,
+                        Decision = "EXECUTE",
+                        Trade = new TradeDecision
+                        {
+                            Direction = "SHORT",
+                            EntryPrice = currentPrice,
+                            StopLoss = bestSignal.StopLoss,
+                            TakeProfit = bestSignal.TakeProfit,
+                            PositionSizeUsd = _configuration.GetValue<decimal>("Trading:DefaultPositionSizeUsd", 100m),
+                            Leverage = _configuration.GetValue<int>("Trading:DefaultLeverage", 5),
+                            Confidence = avgConfidence
+                        },
+                        StrategyScores = shortSignals.ToDictionary(s => s.Strategy, s => s.Confidence),
+                        Reasoning = $"{shortSignals.Count}/{signals.Count} strategies agree on SHORT. " +
+                                   $"Average confidence: {avgConfidence:F1}%. " +
+                                   $"Strategies: {string.Join(", ", shortSignals.Select(s => s.Strategy))}"
+                    };
+
+                    _logger.LogInformation("🚀 Executing SHORT trade: ${Size} at ${Price}, SL: ${SL}, TP: ${TP}, Leverage: {Lev}x",
+                        decision.Trade.PositionSizeUsd,
+                        decision.Trade.EntryPrice,
+                        decision.Trade.StopLoss,
+                        decision.Trade.TakeProfit,
+                        decision.Trade.Leverage);
+
+                    await ExecuteTradeAsync(decision);
+                    return;
+                }
+                else
+                {
+                    _logger.LogInformation("⚠️ SHORT consensus found but confidence too low ({AvgConf:F1}% < {MinConf}%)",
+                        avgConfidence, minConfidence);
+                }
+            }
+
+            // No consensus
+            if (longSignals.Count > 0 || shortSignals.Count > 0)
+            {
+                _logger.LogInformation("ℹ️ No consensus: {LongCount} LONG vs {ShortCount} SHORT (need {MinAgreement}+ agreement)",
+                    longSignals.Count, shortSignals.Count, minAgreement);
+            }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error analyzing {Symbol} with N8N", symbol);
+            _logger.LogError(ex, "Error analyzing {Symbol}", symbol);
         }
     }
 
