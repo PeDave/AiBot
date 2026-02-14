@@ -193,11 +193,22 @@ Respond with ONLY valid JSON, no additional text.";
             }
 
             var responseJson = await response.Content.ReadAsStringAsync();
-            var openAIResponse = JsonSerializer.Deserialize<OpenAIResponse>(responseJson);
+            
+            OpenAIResponse? openAIResponse;
+            try
+            {
+                openAIResponse = JsonSerializer.Deserialize<OpenAIResponse>(responseJson);
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogError(ex, "Failed to deserialize OpenAI API response. Response: {Response}", responseJson);
+                return null;
+            }
 
             var content = openAIResponse?.Choices?.FirstOrDefault()?.Message?.Content;
             if (string.IsNullOrEmpty(content))
             {
+                _logger.LogWarning("OpenAI API returned empty content");
                 return null;
             }
 

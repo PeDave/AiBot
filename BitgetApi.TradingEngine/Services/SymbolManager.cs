@@ -74,8 +74,8 @@ public class SymbolManager
 
     public void UpdateWatchlist(List<string> newSymbols)
     {
-        string oldSymbolsList;
-        string newSymbolsList;
+        List<string> oldSymbolsList;
+        List<string> newSymbolsList;
         
         lock (_lock)
         {
@@ -85,13 +85,13 @@ public class SymbolManager
                 return;
             }
 
-            oldSymbolsList = string.Join(", ", _activeSymbols);
+            oldSymbolsList = new List<string>(_activeSymbols);
             _activeSymbols = new List<string>(newSymbols);
-            newSymbolsList = string.Join(", ", _activeSymbols);
+            newSymbolsList = new List<string>(_activeSymbols);
         }
 
         _logger.LogInformation("🔄 Watchlist updated:");
-        _logger.LogInformation("   Old: {Old}", oldSymbolsList);
-        _logger.LogInformation("   New: {New}", newSymbolsList);
+        _logger.LogInformation("   Old: {Old}", string.Join(", ", oldSymbolsList));
+        _logger.LogInformation("   New: {New}", string.Join(", ", newSymbolsList));
     }
 }

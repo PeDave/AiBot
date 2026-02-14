@@ -95,7 +95,17 @@ public class AltcoinScannerService
             response.EnsureSuccessStatusCode();
 
             var json = await response.Content.ReadAsStringAsync();
-            var result = JsonSerializer.Deserialize<BitgetTickerResponse>(json);
+            
+            BitgetTickerResponse? result;
+            try
+            {
+                result = JsonSerializer.Deserialize<BitgetTickerResponse>(json);
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogError(ex, "Failed to deserialize Bitget ticker response");
+                return new List<BitgetTicker>();
+            }
 
             return result?.Data ?? new List<BitgetTicker>();
         }
