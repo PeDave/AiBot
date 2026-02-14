@@ -1,8 +1,11 @@
 using BitgetApi.TradingEngine.Models;
-using BitgetApi.TradingEngine.Indicators;
 
 namespace BitgetApi.TradingEngine.Strategies;
 
+/// <summary>
+/// Fair Value Gap (FVG) + Liquidity Strategy
+/// Identifies price gaps (imbalances) and liquidity zones
+/// </summary>
 public class FvgLiquidityStrategy : IStrategy
 {
     public string Name => "FVG_Liquidity";
@@ -10,131 +13,120 @@ public class FvgLiquidityStrategy : IStrategy
     public bool IsEnabled { get; set; } = true;
     public Dictionary<string, object> Parameters { get; set; }
 
-    private readonly FvgDetector _fvgDetector;
-    private readonly LiquidityZoneDetector _liquidityDetector;
+    private decimal _minGapPercent = 0.5m; // Minimum 0.5% gap
+    private int _lookbackPeriod = 50;
 
     public FvgLiquidityStrategy(Dictionary<string, object>? parameters = null)
     {
-        Parameters = parameters ?? new Dictionary<string, object>
-        {
-            { "fvg_min_gap_percent", 0.5 },
-            { "liquidity_lookback", 50 },
-            { "retest_tolerance_percent", 0.2 },
-            { "tp_multiplier", 1.5 },
-            { "sl_percent", 1.5 }
-        };
-
-        _fvgDetector = new FvgDetector(GetParameter<double>("fvg_min_gap_percent"));
-        _liquidityDetector = new LiquidityZoneDetector(GetParameter<int>("liquidity_lookback"));
+        Parameters = parameters ?? new Dictionary<string, object>();
+        IsEnabled = true;
+        
+        if (Parameters.ContainsKey("min_gap_percent"))
+            _minGapPercent = Convert.ToDecimal(Parameters["min_gap_percent"]);
+        if (Parameters.ContainsKey("lookback_period"))
+            _lookbackPeriod = Convert.ToInt32(Parameters["lookback_period"]);
     }
 
-    public Task<Signal?> GenerateSignalAsync(string symbol, List<Candle> candles)
+    public async Task<Signal?> GenerateSignalAsync(string symbol, List<Candle> candles)
     {
-        if (candles.Count < 100)
-            return Task.FromResult<Signal?>(null);
-
-        var fvgs = _fvgDetector.DetectFVGs(candles);
-        var liquidityZones = _liquidityDetector.DetectZones(candles);
-        var currentPrice = candles.Last().Close;
-
-        // Look for unfilled FVGs
-        var recentFvgs = fvgs.Where(f => !f.IsFilled)
-                              .OrderByDescending(f => f.CreatedAt)
-                              .Take(5)
-                              .ToList();
-
-        foreach (var fvg in recentFvgs)
+        Console.WriteLine($"🔍 [FVG_Liquidity] Analyzing {symbol} with {candles.Count} candles");
+        
+        try
         {
-            var isRetesting = _fvgDetector.IsRetestingFVG(candles, fvg, GetParameter<double>("retest_tolerance_percent"));
-            var nearLiquidity = _liquidityDetector.IsNearLiquidityZone(currentPrice, liquidityZones);
-
-            if (isRetesting && nearLiquidity)
+            if (candles.Count < _lookbackPeriod)
             {
-                var slPercent = GetParameter<double>("sl_percent");
-                var tpMultiplier = GetParameter<double>("tp_multiplier");
+                Console.WriteLine($"⚠️ [FVG_Liquidity] Not enough candles (need {_lookbackPeriod})");
+                return await Task.FromResult<Signal?>(null);
+            }
 
-                if (fvg.IsBullish)
+            var recentCandles = candles.TakeLast(_lookbackPeriod).ToList();
+            var currentPrice = candles.Last().Close;
+
+            // Find Fair Value Gaps (3-candle pattern)
+            for (int i = recentCandles.Count - 3; i >= 0; i--)
+            {
+                var candle1 = recentCandles[i];
+                var candle2 = recentCandles[i + 1];
+                var candle3 = recentCandles[i + 2];
+
+                // Bullish FVG: candle3.Low > candle1.High (gap up)
+                var bullishGap = candle3.Low - candle1.High;
+                if (bullishGap > 0)
                 {
-                    // Long entry on bullish FVG retest near support
-                    var signal = new Signal
+                    var gapPercent = (bullishGap / candle1.High) * 100;
+                    
+                    if (gapPercent >= _minGapPercent && currentPrice >= candle1.High && currentPrice <= candle3.Low)
                     {
-                        Symbol = symbol,
-                        Strategy = Name,
-                        Type = SignalType.LONG,
-                        EntryPrice = currentPrice,
-                        StopLoss = fvg.GapLow * (1 - (decimal)(slPercent / 100)),
-                        TakeProfit = currentPrice + (fvg.GapSize * (decimal)tpMultiplier),
-                        Confidence = CalculateConfidence(fvg, liquidityZones, currentPrice),
-                        Reason = $"Bullish FVG retest at {fvg.GapLow:F2}-{fvg.GapHigh:F2}, near liquidity zone"
-                    };
+                        var stopLoss = candle1.Low;
+                        var riskAmount = currentPrice - stopLoss;
+                        var takeProfit = currentPrice + (riskAmount * 2m); // 2:1 R:R
+                        var confidence = Math.Min(90m, 60m + gapPercent * 5m);
 
-                    signal.Metadata["fvg_gap_size"] = fvg.GapSize;
-                    signal.Metadata["fvg_created"] = fvg.CreatedAt;
+                        Console.WriteLine($"✅ [FVG_Liquidity] Bullish FVG at {gapPercent:F2}% gap");
 
-                    return Task.FromResult<Signal?>(signal);
+                        return await Task.FromResult(new Signal
+                        {
+                            Symbol = symbol,
+                            Strategy = Name,
+                            Type = SignalType.LONG,
+                            EntryPrice = currentPrice,
+                            StopLoss = stopLoss,
+                            TakeProfit = takeProfit,
+                            Confidence = (double)confidence,
+                            Reason = $"Bullish FVG detected ({gapPercent:F2}% gap), price in fill zone [{candle1.High:F2} - {candle3.Low:F2}]",
+                            Timestamp = DateTime.UtcNow
+                        });
+                    }
                 }
-                else
+
+                // Bearish FVG: candle1.Low > candle3.High (gap down)
+                var bearishGap = candle1.Low - candle3.High;
+                if (bearishGap > 0)
                 {
-                    // Short entry on bearish FVG retest near resistance
-                    var signal = new Signal
+                    var gapPercent = (bearishGap / candle1.Low) * 100;
+                    
+                    if (gapPercent >= _minGapPercent && currentPrice <= candle1.Low && currentPrice >= candle3.High)
                     {
-                        Symbol = symbol,
-                        Strategy = Name,
-                        Type = SignalType.SHORT,
-                        EntryPrice = currentPrice,
-                        StopLoss = fvg.GapHigh * (1 + (decimal)(slPercent / 100)),
-                        TakeProfit = currentPrice - (fvg.GapSize * (decimal)tpMultiplier),
-                        Confidence = CalculateConfidence(fvg, liquidityZones, currentPrice),
-                        Reason = $"Bearish FVG retest at {fvg.GapLow:F2}-{fvg.GapHigh:F2}, near liquidity zone"
-                    };
+                        var stopLoss = candle1.High;
+                        var riskAmount = stopLoss - currentPrice;
+                        var takeProfit = currentPrice - (riskAmount * 2m); // 2:1 R:R
+                        var confidence = Math.Min(90m, 60m + gapPercent * 5m);
 
-                    signal.Metadata["fvg_gap_size"] = fvg.GapSize;
-                    signal.Metadata["fvg_created"] = fvg.CreatedAt;
+                        Console.WriteLine($"✅ [FVG_Liquidity] Bearish FVG at {gapPercent:F2}% gap");
 
-                    return Task.FromResult<Signal?>(signal);
+                        return await Task.FromResult(new Signal
+                        {
+                            Symbol = symbol,
+                            Strategy = Name,
+                            Type = SignalType.SHORT,
+                            EntryPrice = currentPrice,
+                            StopLoss = stopLoss,
+                            TakeProfit = takeProfit,
+                            Confidence = (double)confidence,
+                            Reason = $"Bearish FVG detected ({gapPercent:F2}% gap), price in fill zone [{candle3.High:F2} - {candle1.Low:F2}]",
+                            Timestamp = DateTime.UtcNow
+                        });
+                    }
                 }
             }
-        }
 
-        return Task.FromResult<Signal?>(null);
+            Console.WriteLine($"ℹ️ [FVG_Liquidity] No FVG detected");
+            return await Task.FromResult<Signal?>(null);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ [FVG_Liquidity] ERROR: {ex.Message}");
+            throw;
+        }
     }
 
     public void UpdateParameters(Dictionary<string, object> newParameters)
     {
-        foreach (var param in newParameters)
-        {
-            Parameters[param.Key] = param.Value;
-        }
-    }
-
-    private double CalculateConfidence(FairValueGap fvg, List<LiquidityZone> zones, decimal currentPrice)
-    {
-        var confidence = 70.0;
-
-        // FVG size matters (larger gaps = higher confidence)
-        var gapPercent = (double)(fvg.GapSize / fvg.GapLow * 100);
-        confidence += Math.Min(gapPercent * 2, 15);
-
-        // Proximity to liquidity zone
-        var nearestZone = zones.OrderBy(z => Math.Abs(z.Price - currentPrice)).FirstOrDefault();
-        if (nearestZone != null)
-        {
-            confidence += Math.Min((double)(nearestZone.Strength / 2), 10);
-        }
-
-        return Math.Min(confidence, 95);
-    }
-
-    private T GetParameter<T>(string key)
-    {
-        if (Parameters.TryGetValue(key, out var value))
-        {
-            if (value is T typedValue)
-                return typedValue;
-            
-            return (T)Convert.ChangeType(value, typeof(T));
-        }
+        Parameters = newParameters;
         
-        throw new KeyNotFoundException($"Parameter '{key}' not found");
+        if (Parameters.ContainsKey("min_gap_percent"))
+            _minGapPercent = Convert.ToDecimal(Parameters["min_gap_percent"]);
+        if (Parameters.ContainsKey("lookback_period"))
+            _lookbackPeriod = Convert.ToInt32(Parameters["lookback_period"]);
     }
 }

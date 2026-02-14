@@ -1,8 +1,11 @@
 using BitgetApi.TradingEngine.Models;
-using BitgetApi.TradingEngine.Indicators;
 
 namespace BitgetApi.TradingEngine.Strategies;
 
+/// <summary>
+/// RSI + Volume + EMA Strategy
+/// Identifies oversold/overbought conditions with volume confirmation and EMA trend filter
+/// </summary>
 public class RsiVolumeEmaStrategy : IStrategy
 {
     public string Name => "RSI_Volume_EMA";
@@ -10,121 +13,164 @@ public class RsiVolumeEmaStrategy : IStrategy
     public bool IsEnabled { get; set; } = true;
     public Dictionary<string, object> Parameters { get; set; }
 
-    private readonly RsiIndicator _rsiIndicator;
-    private readonly EmaIndicator _emaIndicator;
-    private readonly VolumeIndicator _volumeIndicator;
+    // Default parameters
+    private int _rsiPeriod = 14;
+    private int _rsiOversold = 30;
+    private int _rsiOverbought = 70;
+    private int _emaPeriod = 50;
+    private decimal _volumeThreshold = 1.5m; // 1.5x average volume
 
     public RsiVolumeEmaStrategy(Dictionary<string, object>? parameters = null)
     {
-        Parameters = parameters ?? new Dictionary<string, object>
-        {
-            { "rsi_period", 14 },
-            { "rsi_oversold", 30.0 },
-            { "rsi_overbought", 70.0 },
-            { "ema_period", 50 },
-            { "volume_multiplier", 1.5 },
-            { "tp_percent", 2.0 },
-            { "sl_percent", 1.0 }
-        };
-
-        _rsiIndicator = new RsiIndicator(GetParameter<int>("rsi_period"));
-        _emaIndicator = new EmaIndicator(GetParameter<int>("ema_period"));
-        _volumeIndicator = new VolumeIndicator();
+        Parameters = parameters ?? new Dictionary<string, object>();
+        IsEnabled = true;
+        
+        // Load parameters if provided
+        if (Parameters.ContainsKey("rsi_period"))
+            _rsiPeriod = Convert.ToInt32(Parameters["rsi_period"]);
+        if (Parameters.ContainsKey("rsi_oversold"))
+            _rsiOversold = Convert.ToInt32(Parameters["rsi_oversold"]);
+        if (Parameters.ContainsKey("rsi_overbought"))
+            _rsiOverbought = Convert.ToInt32(Parameters["rsi_overbought"]);
+        if (Parameters.ContainsKey("ema_period"))
+            _emaPeriod = Convert.ToInt32(Parameters["ema_period"]);
+        if (Parameters.ContainsKey("volume_threshold"))
+            _volumeThreshold = Convert.ToDecimal(Parameters["volume_threshold"]);
     }
 
-    public Task<Signal?> GenerateSignalAsync(string symbol, List<Candle> candles)
+    public async Task<Signal?> GenerateSignalAsync(string symbol, List<Candle> candles)
     {
-        if (candles.Count < 100)
-            return Task.FromResult<Signal?>(null);
-
-        var rsi = _rsiIndicator.Calculate(candles);
-        var ema = _emaIndicator.Calculate(candles);
-        var currentPrice = candles.Last().Close;
-        var volumeSpike = _volumeIndicator.IsVolumeSpike(candles, GetParameter<double>("volume_multiplier"));
-
-        var rsiOversold = GetParameter<double>("rsi_oversold");
-        var rsiOverbought = GetParameter<double>("rsi_overbought");
-        var tpPercent = GetParameter<double>("tp_percent");
-        var slPercent = GetParameter<double>("sl_percent");
-
-        // Long Entry: RSI < oversold, Volume spike, Price > EMA
-        if (rsi < rsiOversold && volumeSpike && currentPrice > ema)
+        Console.WriteLine($"🔍 [RSI_Volume_EMA] Analyzing {symbol} with {candles.Count} candles");
+        
+        try
         {
-            var signal = new Signal
+            if (candles.Count < Math.Max(_rsiPeriod, _emaPeriod) + 20)
             {
-                Symbol = symbol,
-                Strategy = Name,
-                Type = SignalType.LONG,
-                EntryPrice = currentPrice,
-                StopLoss = currentPrice * (1 - (decimal)(slPercent / 100)),
-                TakeProfit = currentPrice * (1 + (decimal)(tpPercent / 100)),
-                Confidence = CalculateConfidence(rsi, volumeSpike, true),
-                Reason = $"RSI oversold ({rsi:F1}), Volume spike ({_volumeIndicator.GetCurrentVolume(candles):F0}), Price above EMA({ema:F2})"
-            };
+                Console.WriteLine($"⚠️ [RSI_Volume_EMA] Not enough candles (need {Math.Max(_rsiPeriod, _emaPeriod) + 20})");
+                return await Task.FromResult<Signal?>(null);
+            }
 
-            return Task.FromResult<Signal?>(signal);
+            // Calculate indicators
+            var rsi = CalculateRSI(candles, _rsiPeriod);
+            var ema = CalculateEMA(candles, _emaPeriod);
+            var avgVolume = candles.TakeLast(20).Average(c => c.Volume);
+            var currentVolume = candles.Last().Volume;
+            var currentPrice = candles.Last().Close;
+
+            Console.WriteLine($"🔍 [RSI_Volume_EMA] RSI: {rsi:F2}, EMA: {ema:F2}, Price: {currentPrice:F2}, Vol: {currentVolume / avgVolume:F2}x avg");
+
+            // LONG Signal: RSI oversold + price above EMA + high volume
+            if (rsi < _rsiOversold && currentPrice > ema && currentVolume > avgVolume * _volumeThreshold)
+            {
+                var stopLoss = currentPrice * 0.97m; // 3% stop loss
+                var takeProfit = currentPrice * 1.06m; // 6% take profit
+                var confidence = Math.Min(95m, 100m - rsi); // Lower RSI = higher confidence
+
+                Console.WriteLine($"✅ [RSI_Volume_EMA] LONG signal at RSI {rsi:F2}");
+
+                return await Task.FromResult(new Signal
+                {
+                    Symbol = symbol,
+                    Strategy = Name,
+                    Type = SignalType.LONG,
+                    EntryPrice = currentPrice,
+                    StopLoss = stopLoss,
+                    TakeProfit = takeProfit,
+                    Confidence = (double)confidence,
+                    Reason = $"RSI oversold ({rsi:F2}), price above EMA ({ema:F2}), high volume ({currentVolume / avgVolume:F2}x)",
+                    Timestamp = DateTime.UtcNow
+                });
+            }
+
+            // SHORT Signal: RSI overbought + price below EMA + high volume
+            if (rsi > _rsiOverbought && currentPrice < ema && currentVolume > avgVolume * _volumeThreshold)
+            {
+                var stopLoss = currentPrice * 1.03m; // 3% stop loss
+                var takeProfit = currentPrice * 0.94m; // 6% take profit
+                var confidence = Math.Min(95m, 50m + (rsi - 70m)); // Higher RSI = higher confidence for short
+
+                Console.WriteLine($"✅ [RSI_Volume_EMA] SHORT signal at RSI {rsi:F2}");
+
+                return await Task.FromResult(new Signal
+                {
+                    Symbol = symbol,
+                    Strategy = Name,
+                    Type = SignalType.SHORT,
+                    EntryPrice = currentPrice,
+                    StopLoss = stopLoss,
+                    TakeProfit = takeProfit,
+                    Confidence = (double)confidence,
+                    Reason = $"RSI overbought ({rsi:F2}), price below EMA ({ema:F2}), high volume ({currentVolume / avgVolume:F2}x)",
+                    Timestamp = DateTime.UtcNow
+                });
+            }
+
+            Console.WriteLine($"ℹ️ [RSI_Volume_EMA] No signal (RSI: {rsi:F2}, conditions not met)");
+            return await Task.FromResult<Signal?>(null);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ [RSI_Volume_EMA] ERROR: {ex.Message}");
+            throw;
+        }
+    }
+
+    private decimal CalculateRSI(List<Candle> candles, int period)
+    {
+        var prices = candles.TakeLast(period + 1).Select(c => c.Close).ToList();
+        
+        var gains = new List<decimal>();
+        var losses = new List<decimal>();
+
+        for (int i = 1; i < prices.Count; i++)
+        {
+            var change = prices[i] - prices[i - 1];
+            gains.Add(change > 0 ? change : 0);
+            losses.Add(change < 0 ? Math.Abs(change) : 0);
         }
 
-        // Short Entry: RSI > overbought, Volume spike, Price < EMA
-        if (rsi > rsiOverbought && volumeSpike && currentPrice < ema)
-        {
-            var signal = new Signal
-            {
-                Symbol = symbol,
-                Strategy = Name,
-                Type = SignalType.SHORT,
-                EntryPrice = currentPrice,
-                StopLoss = currentPrice * (1 + (decimal)(slPercent / 100)),
-                TakeProfit = currentPrice * (1 - (decimal)(tpPercent / 100)),
-                Confidence = CalculateConfidence(rsi, volumeSpike, false),
-                Reason = $"RSI overbought ({rsi:F1}), Volume spike ({_volumeIndicator.GetCurrentVolume(candles):F0}), Price below EMA({ema:F2})"
-            };
+        var avgGain = gains.Average();
+        var avgLoss = losses.Average();
 
-            return Task.FromResult<Signal?>(signal);
+        if (avgLoss == 0) return 100;
+
+        var rs = avgGain / avgLoss;
+        var rsi = 100 - (100 / (1 + rs));
+
+        return rsi;
+    }
+
+    private decimal CalculateEMA(List<Candle> candles, int period)
+    {
+        // Use all available candles but at least 'period' candles
+        var prices = candles.Select(c => c.Close).ToList();
+        if (prices.Count < period)
+            return prices.Last(); // Not enough data, return current price
+            
+        var multiplier = 2m / (period + 1);
+        var ema = prices.Take(period).Average(); // Start with SMA of first period
+
+        foreach (var price in prices.Skip(period))
+        {
+            ema = (price - ema) * multiplier + ema;
         }
 
-        return Task.FromResult<Signal?>(null);
+        return ema;
     }
 
     public void UpdateParameters(Dictionary<string, object> newParameters)
     {
-        foreach (var param in newParameters)
-        {
-            Parameters[param.Key] = param.Value;
-        }
-    }
-
-    private double CalculateConfidence(double rsi, bool volumeSpike, bool isLong)
-    {
-        var confidence = 50.0;
-
-        // RSI strength (max 30 points)
-        if (isLong)
-        {
-            confidence += (30 - rsi) * 0.5; // More oversold = higher confidence
-        }
-        else
-        {
-            confidence += (rsi - 70) * 0.5; // More overbought = higher confidence
-        }
-
-        // Volume spike (20 points)
-        if (volumeSpike)
-            confidence += 20;
-
-        return Math.Min(confidence, 95); // Cap at 95%
-    }
-
-    private T GetParameter<T>(string key)
-    {
-        if (Parameters.TryGetValue(key, out var value))
-        {
-            if (value is T typedValue)
-                return typedValue;
-            
-            return (T)Convert.ChangeType(value, typeof(T));
-        }
+        Parameters = newParameters;
         
-        throw new KeyNotFoundException($"Parameter '{key}' not found");
+        if (Parameters.ContainsKey("rsi_period"))
+            _rsiPeriod = Convert.ToInt32(Parameters["rsi_period"]);
+        if (Parameters.ContainsKey("rsi_oversold"))
+            _rsiOversold = Convert.ToInt32(Parameters["rsi_oversold"]);
+        if (Parameters.ContainsKey("rsi_overbought"))
+            _rsiOverbought = Convert.ToInt32(Parameters["rsi_overbought"]);
+        if (Parameters.ContainsKey("ema_period"))
+            _emaPeriod = Convert.ToInt32(Parameters["ema_period"]);
+        if (Parameters.ContainsKey("volume_threshold"))
+            _volumeThreshold = Convert.ToDecimal(Parameters["volume_threshold"]);
     }
 }

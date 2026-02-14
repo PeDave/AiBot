@@ -1,8 +1,11 @@
 using BitgetApi.TradingEngine.Models;
-using BitgetApi.TradingEngine.Indicators;
 
 namespace BitgetApi.TradingEngine.Strategies;
 
+/// <summary>
+/// Weekly Dollar Cost Averaging Strategy
+/// Buys on a weekly schedule regardless of price
+/// </summary>
 public class WeeklyDcaStrategy : IStrategy
 {
     public string Name => "Weekly_DCA";
@@ -10,144 +13,84 @@ public class WeeklyDcaStrategy : IStrategy
     public bool IsEnabled { get; set; } = true;
     public Dictionary<string, object> Parameters { get; set; }
 
-    private readonly EmaIndicator _emaIndicator;
-    private readonly SmaIndicator _smaIndicator;
-    private readonly LiquidityZoneDetector _liquidityDetector;
-    private DateTime _lastWeeklyDca = DateTime.MinValue;
-    private DateTime _lastDailyDca = DateTime.MinValue;
+    private DayOfWeek _buyDay = DayOfWeek.Monday;
+    private int _buyHour = 10; // 10 AM UTC
+    private decimal _buyAmountUsd = 100m;
+    private DateTime? _lastBuyDate = null;
 
     public WeeklyDcaStrategy(Dictionary<string, object>? parameters = null)
     {
-        Parameters = parameters ?? new Dictionary<string, object>
-        {
-            { "base_amount_usd", 10.0 },
-            { "ema_period", 200 },
-            { "sma_period", 200 },
-            { "weekly_multiplier", 1.0 },
-            { "daily_multiplier", 2.0 },
-            { "liquidity_multiplier", 1.5 }
-        };
-
-        _emaIndicator = new EmaIndicator(GetParameter<int>("ema_period"));
-        _smaIndicator = new SmaIndicator(GetParameter<int>("sma_period"));
-        _liquidityDetector = new LiquidityZoneDetector();
+        Parameters = parameters ?? new Dictionary<string, object>();
+        IsEnabled = true;
+        
+        if (Parameters.ContainsKey("buy_day"))
+            _buyDay = (DayOfWeek)Convert.ToInt32(Parameters["buy_day"]);
+        if (Parameters.ContainsKey("buy_hour"))
+            _buyHour = Convert.ToInt32(Parameters["buy_hour"]);
+        if (Parameters.ContainsKey("buy_amount_usd"))
+            _buyAmountUsd = Convert.ToDecimal(Parameters["buy_amount_usd"]);
     }
 
-    public Task<Signal?> GenerateSignalAsync(string symbol, List<Candle> candles)
+    public async Task<Signal?> GenerateSignalAsync(string symbol, List<Candle> candles)
     {
-        if (candles.Count < 250)
-            return Task.FromResult<Signal?>(null);
-
-        var currentPrice = candles.Last().Close;
-        var ema200 = _emaIndicator.Calculate(candles);
-        var sma200 = _smaIndicator.Calculate(candles);
-        var liquidityZones = _liquidityDetector.DetectZones(candles);
-        var nearLiquidity = _liquidityDetector.IsNearLiquidityZone(currentPrice, liquidityZones, 1.0);
-
-        var now = DateTime.UtcNow;
-        var baseAmount = GetParameter<double>("base_amount_usd");
-        var weeklyMultiplier = GetParameter<double>("weekly_multiplier");
-        var dailyMultiplier = GetParameter<double>("daily_multiplier");
-        var liquidityMultiplier = GetParameter<double>("liquidity_multiplier");
-
-        // Determine DCA type and amount
-        var priceBelow200 = currentPrice < ema200 && currentPrice < sma200;
+        Console.WriteLine($"🔍 [Weekly_DCA] Checking {symbol}");
         
-        // Check if price is below both 200 EMA and 200 SMA -> Daily DCA
-        if (priceBelow200 && (now - _lastDailyDca).TotalHours >= 24)
+        try
         {
-            _lastDailyDca = now;
-            var dcaAmount = baseAmount * dailyMultiplier; // $20
+            var now = DateTime.UtcNow;
+            var currentPrice = candles.Last().Close;
 
-            var signal = new Signal
+            // Check if it's the right day and hour
+            if (now.DayOfWeek != _buyDay || now.Hour != _buyHour)
+            {
+                Console.WriteLine($"ℹ️ [Weekly_DCA] Not buy time (now: {now.DayOfWeek} {now.Hour}:00, target: {_buyDay} {_buyHour}:00)");
+                return await Task.FromResult<Signal?>(null);
+            }
+
+            // Check if already bought this week
+            if (_lastBuyDate.HasValue && (now - _lastBuyDate.Value).TotalDays < 7)
+            {
+                Console.WriteLine($"ℹ️ [Weekly_DCA] Already bought this week ({_lastBuyDate.Value:yyyy-MM-dd})");
+                return await Task.FromResult<Signal?>(null);
+            }
+
+            // Generate DCA buy signal
+            _lastBuyDate = now;
+            
+            var stopLoss = currentPrice * 0.90m; // 10% stop loss
+            var takeProfit = currentPrice * 1.20m; // 20% take profit (long-term hold)
+            
+            Console.WriteLine($"✅ [Weekly_DCA] DCA buy signal: ${_buyAmountUsd} at ${currentPrice:F2}");
+
+            return await Task.FromResult(new Signal
             {
                 Symbol = symbol,
                 Strategy = Name,
                 Type = SignalType.LONG,
                 EntryPrice = currentPrice,
-                StopLoss = 0, // No SL for DCA
-                TakeProfit = 0, // No TP for DCA (long-term hold)
-                Confidence = 90,
-                Reason = $"Daily DCA - Price below 200 EMA ({ema200:F2}) and 200 SMA ({sma200:F2})"
-            };
-
-            signal.Metadata["dca_type"] = "Daily";
-            signal.Metadata["dca_amount_usd"] = dcaAmount;
-            signal.Metadata["price_below_200"] = true;
-
-            return Task.FromResult<Signal?>(signal);
+                StopLoss = stopLoss,
+                TakeProfit = takeProfit,
+                Confidence = 80, // DCA is consistent strategy
+                Reason = $"Weekly DCA buy on {_buyDay}, ${_buyAmountUsd} investment",
+                Timestamp = now
+            });
         }
-
-        // Check if at liquidity zone -> Enhanced DCA
-        if (nearLiquidity && (now - _lastWeeklyDca).TotalDays >= 7)
+        catch (Exception ex)
         {
-            _lastWeeklyDca = now;
-            var dcaAmount = baseAmount * liquidityMultiplier; // $15
-
-            var signal = new Signal
-            {
-                Symbol = symbol,
-                Strategy = Name,
-                Type = SignalType.LONG,
-                EntryPrice = currentPrice,
-                StopLoss = 0,
-                TakeProfit = 0,
-                Confidence = 85,
-                Reason = $"Liquidity Zone DCA - Price at support level"
-            };
-
-            signal.Metadata["dca_type"] = "LiquidityZone";
-            signal.Metadata["dca_amount_usd"] = dcaAmount;
-            signal.Metadata["near_liquidity"] = true;
-
-            return Task.FromResult<Signal?>(signal);
+            Console.WriteLine($"❌ [Weekly_DCA] ERROR: {ex.Message}");
+            throw;
         }
-
-        // Default weekly DCA
-        if ((now - _lastWeeklyDca).TotalDays >= 7)
-        {
-            _lastWeeklyDca = now;
-            var dcaAmount = baseAmount * weeklyMultiplier; // $10
-
-            var signal = new Signal
-            {
-                Symbol = symbol,
-                Strategy = Name,
-                Type = SignalType.LONG,
-                EntryPrice = currentPrice,
-                StopLoss = 0,
-                TakeProfit = 0,
-                Confidence = 75,
-                Reason = $"Weekly DCA - Regular accumulation"
-            };
-
-            signal.Metadata["dca_type"] = "Weekly";
-            signal.Metadata["dca_amount_usd"] = dcaAmount;
-
-            return Task.FromResult<Signal?>(signal);
-        }
-
-        return Task.FromResult<Signal?>(null);
     }
 
     public void UpdateParameters(Dictionary<string, object> newParameters)
     {
-        foreach (var param in newParameters)
-        {
-            Parameters[param.Key] = param.Value;
-        }
-    }
-
-    private T GetParameter<T>(string key)
-    {
-        if (Parameters.TryGetValue(key, out var value))
-        {
-            if (value is T typedValue)
-                return typedValue;
-            
-            return (T)Convert.ChangeType(value, typeof(T));
-        }
+        Parameters = newParameters;
         
-        throw new KeyNotFoundException($"Parameter '{key}' not found");
+        if (Parameters.ContainsKey("buy_day"))
+            _buyDay = (DayOfWeek)Convert.ToInt32(Parameters["buy_day"]);
+        if (Parameters.ContainsKey("buy_hour"))
+            _buyHour = Convert.ToInt32(Parameters["buy_hour"]);
+        if (Parameters.ContainsKey("buy_amount_usd"))
+            _buyAmountUsd = Convert.ToDecimal(Parameters["buy_amount_usd"]);
     }
 }
