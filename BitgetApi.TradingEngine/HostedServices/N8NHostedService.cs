@@ -62,7 +62,9 @@ public class N8NHostedService : IHostedService, IDisposable
             var startInfo = new ProcessStartInfo
             {
                 FileName = _npxPath,
-                Arguments = "n8n start --tunnel",
+                Arguments = _configuration.GetValue<bool>("N8N:UseTunnel", true) 
+                    ? "n8n start --tunnel" 
+                    : "n8n start",
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -80,7 +82,7 @@ public class N8NHostedService : IHostedService, IDisposable
             var systemPath = Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.Machine);
             if (!string.IsNullOrEmpty(userPath) && !string.IsNullOrEmpty(systemPath))
             {
-                startInfo.Environment["PATH"] = $"{systemPath};{userPath}";
+                startInfo.Environment["PATH"] = $"{systemPath}{Path.PathSeparator}{userPath}";
                 _logger.LogDebug("PATH environment: {Path}", startInfo.Environment["PATH"]);
             }
 
@@ -255,7 +257,7 @@ public class N8NHostedService : IHostedService, IDisposable
         var userPath = Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.User) ?? "";
         var processPath = Environment.GetEnvironmentVariable("PATH") ?? "";
         
-        var paths = $"{systemPath};{userPath};{processPath}".Split(';', StringSplitOptions.RemoveEmptyEntries);
+        var paths = $"{systemPath}{Path.PathSeparator}{userPath}{Path.PathSeparator}{processPath}".Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries);
 
         foreach (var path in paths)
         {
