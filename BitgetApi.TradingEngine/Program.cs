@@ -88,10 +88,12 @@ builder.Services.AddSingleton<IStrategy, LLMAnalysisStrategy>(sp =>
 
 // Register N8N Integration
 builder.Services.AddHttpClient<N8NWebhookClient>()
-    .ConfigureHttpClient(client =>
+    .ConfigureHttpClient((serviceProvider, client) =>
     {
-        // Reduce timeout from 100s to 30s
-        client.Timeout = TimeSpan.FromSeconds(30);
+        // Read timeout from configuration for consistency
+        var config = serviceProvider.GetRequiredService<IConfiguration>();
+        var timeoutSeconds = config.GetValue<int>("N8N:TimeoutSeconds", 30);
+        client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
     })
     .ConfigurePrimaryHttpMessageHandler(() =>
     {

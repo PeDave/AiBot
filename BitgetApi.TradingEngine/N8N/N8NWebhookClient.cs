@@ -82,41 +82,23 @@ public class N8NWebhookClient
                 }
 
                 _logger.LogWarning("Failed to get decision from N8N: {StatusCode}", response.StatusCode);
-                
-                if (attempt < _maxRetries)
-                {
-                    var delay = retryDelaySeconds * 1000; // Convert to milliseconds
-                    _logger.LogWarning("⚠️ Retrying in {Delay}s...", retryDelaySeconds);
-                    await Task.Delay(delay);
-                }
             }
-            catch (TaskCanceledException ex)
+            catch (TaskCanceledException)
             {
                 _logger.LogError("❌ Error sending strategy analysis to N8N for {Symbol} (attempt {Attempt}/{MaxRetries}): TIMEOUT after {Timeout}s", 
                     symbol, attempt, _maxRetries, _timeoutSeconds);
                 
-                if (attempt < _maxRetries)
-                {
-                    var delay = retryDelaySeconds * 1000;
-                    _logger.LogWarning("⚠️ Retrying in {Delay}s...", retryDelaySeconds);
-                    await Task.Delay(delay);
-                }
-                else
+                if (attempt >= _maxRetries)
                 {
                     throw;
                 }
             }
             catch (HttpRequestException ex)
             {
-                _logger.LogWarning("⚠️ Failed to send to N8N (attempt {Attempt}/{Max}): {Error}. Retrying in {Delay}s...", 
-                    attempt, _maxRetries, ex.Message, retryDelaySeconds);
+                _logger.LogWarning("⚠️ Failed to send to N8N (attempt {Attempt}/{Max}): {Error}", 
+                    attempt, _maxRetries, ex.Message);
                 
-                if (attempt < _maxRetries)
-                {
-                    var delay = retryDelaySeconds * 1000;
-                    await Task.Delay(delay);
-                }
-                else
+                if (attempt >= _maxRetries)
                 {
                     throw;
                 }
@@ -126,16 +108,18 @@ public class N8NWebhookClient
                 _logger.LogError(ex, "❌ Error sending strategy analysis to N8N for {Symbol} (attempt {Attempt}/{Max})", 
                     symbol, attempt, _maxRetries);
                 
-                if (attempt == _maxRetries)
+                if (attempt >= _maxRetries)
                 {
                     throw; // Re-throw on final attempt to trigger fallback
                 }
-                
-                if (attempt < _maxRetries)
-                {
-                    var delay = retryDelaySeconds * 1000;
-                    await Task.Delay(delay);
-                }
+            }
+
+            // Retry delay (only if not on last attempt)
+            if (attempt < _maxRetries)
+            {
+                var delay = TimeSpan.FromSeconds(retryDelaySeconds);
+                _logger.LogWarning("⚠️ Retrying in {Delay}s...", retryDelaySeconds);
+                await Task.Delay(delay);
             }
         }
 
