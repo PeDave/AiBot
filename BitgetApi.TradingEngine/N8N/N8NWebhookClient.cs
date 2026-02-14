@@ -15,6 +15,7 @@ public class N8NWebhookClient
     private readonly string _baseUrl;
     private readonly int _timeoutSeconds;
     private readonly int _maxRetries;
+    private readonly int _retryDelaySeconds;
 
     public N8NWebhookClient(
         HttpClient httpClient, 
@@ -27,11 +28,11 @@ public class N8NWebhookClient
         _baseUrl = configuration["N8N:WebhookBaseUrl"] ?? "";
         _timeoutSeconds = configuration.GetValue<int>("N8N:TimeoutSeconds", 30);
         _maxRetries = configuration.GetValue<int>("N8N:MaxRetries", 3);
+        _retryDelaySeconds = configuration.GetValue<int>("N8N:RetryDelaySeconds", 5);
     }
 
     public async Task<AgentDecision?> SendStrategyAnalysisAsync(string symbol, List<Signal> signals, Dictionary<string, object> marketData)
     {
-        var retryDelaySeconds = _configuration.GetValue<int>("N8N:RetryDelaySeconds", 5);
 
         for (int attempt = 1; attempt <= _maxRetries; attempt++)
         {
@@ -117,9 +118,8 @@ public class N8NWebhookClient
             // Retry delay (only if not on last attempt)
             if (attempt < _maxRetries)
             {
-                var delay = TimeSpan.FromSeconds(retryDelaySeconds);
-                _logger.LogWarning("⚠️ Retrying in {Delay}s...", retryDelaySeconds);
-                await Task.Delay(delay);
+                _logger.LogWarning("⚠️ Retrying in {Delay} seconds...", _retryDelaySeconds);
+                await Task.Delay(TimeSpan.FromSeconds(_retryDelaySeconds));
             }
         }
 
