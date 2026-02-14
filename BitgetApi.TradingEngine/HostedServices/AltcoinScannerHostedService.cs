@@ -39,7 +39,8 @@ public class AltcoinScannerHostedService : BackgroundService
         _logger.LogInformation("🔍 Altcoin Scanner Service started");
 
         // Initial delay
-        await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
+        var initialDelaySeconds = _configuration.GetValue<int>("AltcoinScanner:InitialDelaySeconds", 30);
+        await Task.Delay(TimeSpan.FromSeconds(initialDelaySeconds), stoppingToken);
 
         var intervalMinutes = _configuration.GetValue<int>("AltcoinScanner:ScanIntervalMinutes", 60);
 

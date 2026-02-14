@@ -154,8 +154,9 @@ public class AltcoinScannerService
                 TotalScore = totalScore
             };
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogDebug(ex, "Failed to calculate score for {Symbol}", ticker.Symbol);
             return null;
         }
     }

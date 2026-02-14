@@ -184,7 +184,13 @@ Respond with ONLY valid JSON, no additional text.";
                 "application/json");
 
             var response = await _httpClient.SendAsync(request);
-            response.EnsureSuccessStatusCode();
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.LogError("OpenAI API error: {StatusCode} - {Error}", response.StatusCode, errorContent);
+                response.EnsureSuccessStatusCode();
+            }
 
             var responseJson = await response.Content.ReadAsStringAsync();
             var openAIResponse = JsonSerializer.Deserialize<OpenAIResponse>(responseJson);
@@ -196,8 +202,16 @@ Respond with ONLY valid JSON, no additional text.";
             }
 
             // Parse LLM response
-            var result = JsonSerializer.Deserialize<LLMAnalysisResult>(content.Trim());
-            return result;
+            try
+            {
+                var result = JsonSerializer.Deserialize<LLMAnalysisResult>(content.Trim());
+                return result;
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogError(ex, "Failed to parse LLM response as JSON. Content: {Content}", content);
+                return null;
+            }
         }
         catch (Exception ex)
         {
