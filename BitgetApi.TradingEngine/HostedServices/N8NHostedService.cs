@@ -18,7 +18,7 @@ public class N8NHostedService : IHostedService, IDisposable
     private string? _npxPath;
     
     private const int HealthCheckTimeoutSeconds = 3;
-    private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(HealthCheckTimeoutSeconds) };
+    private static readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(HealthCheckTimeoutSeconds) };
 
     public N8NHostedService(
         ILogger<N8NHostedService> logger,
@@ -81,11 +81,11 @@ public class N8NHostedService : IHostedService, IDisposable
             startInfo.Environment["N8N_HOST"] = "localhost";
 
             // Inherit user PATH environment (important for Windows)
-            var pathComponents = GetPathComponents();
+            var pathDirectories = GetPathDirectories();
             
-            if (pathComponents.Any())
+            if (pathDirectories.Any())
             {
-                startInfo.Environment["PATH"] = string.Join(Path.PathSeparator, pathComponents);
+                startInfo.Environment["PATH"] = string.Join(Path.PathSeparator, pathDirectories);
                 _logger.LogDebug("PATH environment: {Path}", startInfo.Environment["PATH"]);
             }
 
@@ -250,16 +250,22 @@ public class N8NHostedService : IHostedService, IDisposable
     }
 
     /// <summary>
-    /// Gets all available PATH components from system, user, and process environments
+    /// Gets all individual PATH directories from system, user, and process environments
     /// </summary>
-    private IEnumerable<string> GetPathComponents()
+    private IEnumerable<string> GetPathDirectories()
     {
         var systemPath = Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.Machine);
         var userPath = Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.User);
         var processPath = Environment.GetEnvironmentVariable("PATH");
         
-        return new[] { systemPath, userPath, processPath }
-            .Where(p => !string.IsNullOrEmpty(p))!;
+        var allPaths = new[] { systemPath, userPath, processPath }
+            .Where(p => !string.IsNullOrEmpty(p))
+            .SelectMany(p => p!.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+            .Select(p => p.Trim())
+            .Where(p => !string.IsNullOrEmpty(p))
+            .Distinct();
+        
+        return allPaths;
     }
 
     /// <summary>
@@ -267,15 +273,13 @@ public class N8NHostedService : IHostedService, IDisposable
     /// </summary>
     private string? FindInPath(string fileName)
     {
-        var pathComponents = GetPathComponents();
-        var combinedPath = string.Join(Path.PathSeparator, pathComponents);
-        var paths = combinedPath.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries);
+        var paths = GetPathDirectories();
 
         foreach (var path in paths)
         {
             try
             {
-                var fullPath = Path.Combine(path.Trim(), fileName);
+                var fullPath = Path.Combine(path, fileName);
                 if (File.Exists(fullPath))
                 {
                     return fullPath;
