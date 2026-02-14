@@ -43,6 +43,14 @@ public class N8NHostedService : IHostedService, IDisposable
             return;
         }
 
+        var enableHosting = _configuration.GetValue<bool>("N8N:EnableHosting", true);
+        
+        if (!enableHosting)
+        {
+            _logger.LogInformation("ℹ️ N8N hosting is disabled. Assuming external N8N instance.");
+            return;
+        }
+
         try
         {
             _logger.LogInformation("🚀 Starting N8N process...");
