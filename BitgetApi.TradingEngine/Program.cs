@@ -95,6 +95,7 @@ builder.Services.AddScoped<StrategyOrchestrator>();
 // Register Hosted Services
 builder.Services.AddHostedService<StrategyAnalysisService>();
 builder.Services.AddHostedService<PerformanceReportingService>();
+builder.Services.AddHostedService<N8NHostedService>();
 
 // Logging
 builder.Services.AddLogging(logging =>
