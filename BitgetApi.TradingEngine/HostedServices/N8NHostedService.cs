@@ -185,18 +185,21 @@ public class N8NHostedService : IHostedService, IDisposable
                         
                         // Kill entire process tree (includes child processes)
                         _n8nProcess.Kill(entireProcessTree: true);
+                        _logger.LogInformation("N8N process kill signal sent");
                         
-                        // Wait max 5 seconds for graceful exit
-                        // Using synchronous WaitForExit for reliable timeout behavior as 
-                        // CancellationToken cancellation may not interrupt process waiting
-                        if (!_n8nProcess.WaitForExit(ProcessShutdownTimeoutMs))
+                        // Wait for process exit with timeout
+                        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(ProcessShutdownTimeoutMs));
+                        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+                        
+                        try
                         {
-                            _logger.LogWarning("⚠️ N8N process did not exit gracefully within {Timeout}s", 
-                                ProcessShutdownTimeoutMs / 1000);
-                        }
-                        else
-                        {
+                            await _n8nProcess.WaitForExitAsync(linkedCts.Token);
                             _logger.LogInformation("✅ N8N process stopped successfully (PID: {ProcessId})", processId);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            _logger.LogWarning("⚠️ N8N process did not exit within timeout, forcing termination");
+                            // Process might still be alive, but we're moving on
                         }
                     }
                     else
