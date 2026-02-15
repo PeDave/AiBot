@@ -163,7 +163,8 @@ public class DashboardService
         var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
         
         IsN8NRunning = config.GetValue<bool>("N8N:Enabled", false);
-        LastWebhookLatency = 120; // TODO: Get from metrics
+        // TODO: Implement metrics tracking service for actual webhook latency
+        LastWebhookLatency = 0; // Placeholder until metrics service is implemented
         AnalysisInterval = config.GetValue<int>("StrategyAnalysis:IntervalMinutes", 15);
         AutoTradingEnabled = config.GetValue<bool>("Trading:EnableAutoTrading", false);
     }
@@ -200,4 +201,27 @@ public class StrategyStatus
     public string Name { get; set; } = string.Empty;
     public bool IsEnabled { get; set; }
     public DateTime? LastRun { get; set; }
+}
+
+public static class DashboardHelpers
+{
+    public static string GetDecisionCssClass(string decision)
+    {
+        return decision.ToUpper() switch
+        {
+            "EXECUTE" => "execute",
+            "NO_ACTION" => "no_action",
+            _ => string.Empty
+        };
+    }
+    
+    public static string GetDirectionCssClass(string direction)
+    {
+        return direction.ToUpper() switch
+        {
+            "LONG" => "long",
+            "SHORT" => "short",
+            _ => string.Empty
+        };
+    }
 }

@@ -74,7 +74,7 @@
                             <td>@signal.Timestamp.ToString("HH:mm:ss")</td>
                             <td>@signal.Symbol</td>
                             <td>@signal.Strategy</td>
-                            <td class="@signal.Direction.ToLower()">@signal.Direction</td>
+                            <td class="@DashboardHelpers.GetDirectionCssClass(signal.Direction)">@signal.Direction</td>
                             <td>@signal.Confidence.ToString("N1")%</td>
                         </tr>
                     }
@@ -107,7 +107,7 @@
                         <tr>
                             <td>@decision.Timestamp.ToString("HH:mm:ss")</td>
                             <td>@decision.Symbol</td>
-                            <td class="@decision.Decision.ToLower().Replace("_", "")">@decision.Decision</td>
+                            <td class="@DashboardHelpers.GetDecisionCssClass(decision.Decision)">@decision.Decision</td>
                             <td>@decision.Reasoning</td>
                         </tr>
                     }
