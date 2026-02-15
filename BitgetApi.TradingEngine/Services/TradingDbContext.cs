@@ -12,6 +12,8 @@ public class TradingDbContext : DbContext
     public DbSet<Position> Positions { get; set; } = null!;
     public DbSet<DcaOrder> DcaOrders { get; set; } = null!;
     public DbSet<StrategyMetrics> StrategyMetrics { get; set; } = null!;
+    public DbSet<TradeSignal> TradeSignals { get; set; } = null!;
+    public DbSet<N8NDecision> N8NDecisions { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -51,6 +53,27 @@ public class TradingDbContext : DbContext
             // Ignore the CurrentParameters property as it's a complex dictionary
             // It's used for runtime data transfer, not for database storage
             entity.Ignore(e => e.CurrentParameters);
+        });
+
+        modelBuilder.Entity<TradeSignal>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedOnAdd();
+            entity.Property(e => e.Symbol).IsRequired();
+            entity.Property(e => e.Strategy).IsRequired();
+            entity.Property(e => e.Type).IsRequired();
+            entity.Property(e => e.EntryPrice).HasPrecision(18, 8);
+            entity.Property(e => e.StopLoss).HasPrecision(18, 8);
+            entity.Property(e => e.TakeProfit).HasPrecision(18, 8);
+            entity.Property(e => e.Confidence).HasPrecision(5, 2);
+        });
+
+        modelBuilder.Entity<N8NDecision>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedOnAdd();
+            entity.Property(e => e.Symbol).IsRequired();
+            entity.Property(e => e.Decision).IsRequired();
         });
     }
 }

@@ -1,0 +1,169 @@
+@page "/"
+@page "/dashboard"
+@using BitgetApi.TradingEngine.Services
+@inject DashboardService DashboardService
+@inject NavigationManager Navigation
+
+<PageTitle>Trading Dashboard</PageTitle>
+
+<h1>Trading Dashboard</h1>
+
+<div class="dashboard-grid">
+    <!-- Portfolio Section -->
+    <div class="card">
+        <h3>Portfolio</h3>
+        <p>Spot: $@DashboardService.SpotBalance.ToString("N2")</p>
+        <p>Earn: $@DashboardService.EarnBalance.ToString("N2")</p>
+        <p><strong>Total: $@DashboardService.TotalBalance.ToString("N2")</strong></p>
+    </div>
+
+    <!-- Watchlist Section -->
+    <div class="card">
+        <h3>Watchlist</h3>
+        @if (DashboardService.Watchlist.Any())
+        {
+            <table>
+                <thead>
+                    <tr>
+                        <th>Symbol</th>
+                        <th>Price</th>
+                        <th>24h %</th>
+                        <th>Last Signal</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var symbol in DashboardService.Watchlist)
+                    {
+                        <tr>
+                            <td>@symbol.Symbol</td>
+                            <td>$@symbol.Price.ToString("N2")</td>
+                            <td class="@(symbol.Change24h > 0 ? "positive" : "negative")">
+                                @symbol.Change24h.ToString("+0.00;-0.00")%
+                            </td>
+                            <td>@symbol.LastSignal</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <p>No symbols in watchlist</p>
+        }
+    </div>
+
+    <!-- Recent Signals -->
+    <div class="card">
+        <h3>Recent Signals</h3>
+        @if (DashboardService.RecentSignals.Any())
+        {
+            <table>
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Symbol</th>
+                        <th>Strategy</th>
+                        <th>Direction</th>
+                        <th>Confidence</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var signal in DashboardService.RecentSignals)
+                    {
+                        <tr>
+                            <td>@signal.Timestamp.ToString("HH:mm:ss")</td>
+                            <td>@signal.Symbol</td>
+                            <td>@signal.Strategy</td>
+                            <td class="@signal.Direction.ToLower()">@signal.Direction</td>
+                            <td>@signal.Confidence.ToString("N1")%</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <p>No recent signals</p>
+        }
+    </div>
+
+    <!-- N8N Decisions -->
+    <div class="card">
+        <h3>N8N Decisions</h3>
+        @if (DashboardService.RecentDecisions.Any())
+        {
+            <table>
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Symbol</th>
+                        <th>Decision</th>
+                        <th>Reasoning</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var decision in DashboardService.RecentDecisions)
+                    {
+                        <tr>
+                            <td>@decision.Timestamp.ToString("HH:mm:ss")</td>
+                            <td>@decision.Symbol</td>
+                            <td class="@decision.Decision.ToLower().Replace("_", "")">@decision.Decision</td>
+                            <td>@decision.Reasoning</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <p>No recent decisions</p>
+        }
+    </div>
+
+    <!-- Strategy Status -->
+    <div class="card">
+        <h3>Strategies</h3>
+        @if (DashboardService.Strategies.Any())
+        {
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Status</th>
+                        <th>Last Run</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var strategy in DashboardService.Strategies)
+                    {
+                        <tr>
+                            <td>@strategy.Name</td>
+                            <td>@(strategy.IsEnabled ? "✅ ON" : "⭕ OFF")</td>
+                            <td>@(strategy.LastRun?.ToString("HH:mm:ss") ?? "-")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <p>No strategies configured</p>
+        }
+    </div>
+
+    <!-- System Health -->
+    <div class="card">
+        <h3>System Health</h3>
+        <p>N8N: @(DashboardService.IsN8NRunning ? "✅ Running" : "❌ Stopped")</p>
+        <p>Last Webhook: @(DashboardService.LastWebhookLatency)ms</p>
+        <p>Analysis Interval: @(DashboardService.AnalysisInterval) minutes</p>
+        <p>Auto Trading: @(DashboardService.AutoTradingEnabled ? "✅ Enabled" : "⭕ Disabled")</p>
+    </div>
+</div>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        await DashboardService.LoadDataAsync();
+    }
+}

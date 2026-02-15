@@ -1,5 +1,6 @@
 using BitgetApi;
 using BitgetApi.Models;
+using BitgetApi.TradingEngine;
 using BitgetApi.TradingEngine.Services;
 using BitgetApi.TradingEngine.Trading;
 using BitgetApi.TradingEngine.Strategies;
@@ -11,6 +12,10 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container
 builder.Services.AddControllers();
+
+// Add Blazor Server support
+builder.Services.AddRazorComponents()
+    .AddInteractiveServerComponents();
 
 // Add OpenAPI/Swagger
 builder.Services.AddEndpointsApiExplorer();
@@ -133,6 +138,7 @@ builder.Services.AddSingleton<AltcoinScannerService>();
 builder.Services.AddSingleton<SymbolManager>();
 builder.Services.AddScoped<PerformanceTracker>();
 builder.Services.AddScoped<StrategyOrchestrator>();
+builder.Services.AddScoped<DashboardService>();
 
 // Register Hosted Services
 builder.Services.AddHostedService<StrategyAnalysisService>();
@@ -167,8 +173,15 @@ if (app.Environment.IsDevelopment())
     });
 }
 
+app.UseStaticFiles();
+app.UseAntiforgery();
+
 app.UseAuthorization();
 app.MapControllers();
+
+// Map Blazor
+app.MapRazorComponents<App>()
+    .AddInteractiveServerRenderMode();
 
 app.Logger.LogInformation("BitgetApi.TradingEngine started");
 app.Logger.LogInformation("Auto-trading: {Enabled}", 
